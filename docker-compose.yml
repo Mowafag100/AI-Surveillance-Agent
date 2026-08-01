@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: surveillance-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: securepassword123
+      POSTGRES_DB: surveillance
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d surveillance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - surveillance_net
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: surveillance-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - surveillance_net
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: surveillance-agent
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://admin:securepassword123@postgres:5432/surveillance
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./alerts:/app/alerts
+      - ./models:/app/models
+      - ./.env:/app/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - surveillance_net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+networks:
+  surveillance_net:
+    driver: bridge
+
+volumes:
+  postgres_data:

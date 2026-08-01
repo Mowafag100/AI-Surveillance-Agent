@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# تثبيت التبعيات النظامية (معدل)
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# نسخ ملف المتطلبات وتثبيت الحزم
+COPY requirements.agent.txt .
+RUN pip install --no-cache-dir -r requirements.agent.txt
+
+# تحميل نموذج YOLO (يُحمّل عند التشغيل الأول)
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+
+# نسخ الكود
+COPY src/ ./src/
+COPY main.py .
+COPY .env .
+
+CMD ["python", "main.py"]
