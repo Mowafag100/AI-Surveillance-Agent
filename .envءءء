@@ -1,0 +1,18 @@
+CAMERA_URL=http://172.35.33.191:8080/video
+TELEGRAM_BOT_TOKEN=8910410190:AAGbKqlmDfzPCst3_jhx0Hc1xWmDweawvRA
+TELEGRAM_CHAT_ID=7062435716
+ALERT_COOLDOWN=30
+MIN_CONFIDENCE=0.3
+# إعدادات المنطقة الحساسة (Zone)
+ZONE_TOP_LEFT_X=0
+ZONE_TOP_LEFT_Y=0
+ZONE_BOTTOM_RIGHT_X=1280
+ZONE_BOTTOM_RIGHT_Y=720
+# إعدادات التوقيت
+ALERT_START_HOUR=23   # 11 مساءً
+ALERT_END_HOUR=5      # 5 صباحاً
+# قاعدة البيانات
+DATABASE_URL=postgresql+asyncpg://admin:securepassword123@localhost:5432/surveillance
+
+# إعدادات الكاميرات (مثال)
+CAMERAS_JSON='[{"id": 1, "name": "Gate 1", "url": "http://172.35.33.208:8080/video"}]'
