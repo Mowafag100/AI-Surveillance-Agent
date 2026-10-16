@@ -9,10 +9,13 @@ class Config:
     TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
     ALERT_COOLDOWN = int(os.getenv("ALERT_COOLDOWN", 30))
     MIN_CONFIDENCE = float(os.getenv("MIN_CONFIDENCE", 0.5))
+    FALL_ASPECT_RATIO_THRESHOLD = float(os.getenv("FALL_ASPECT_RATIO_THRESHOLD", 1.2))
+    FIGHT_SPEED_THRESHOLD = int(os.getenv("FIGHT_SPEED_THRESHOLD", 100))
+    FIGHT_DISTANCE_THRESHOLD = int(os.getenv("FIGHT_DISTANCE_THRESHOLD", 50))
     MODEL_PATH = "models/yolov8n.pt"
     ALERTS_DIR = "alerts"
     LOGS_DIR = "logs"
-    ZONE_DWELL_TIME = int(os.getenv("ZONE_DWELL_TIME", 2))
+    ZONE_DWELL_TIME = float(os.getenv("ZONE_DWELL_TIME", 2.0))
     
     # إعدادات المنطقة الحساسة
     ZONE_TOP_LEFT_X = int(os.getenv("ZONE_TOP_LEFT_X", 100))
