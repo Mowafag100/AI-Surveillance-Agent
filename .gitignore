@@ -8,3 +8,27 @@ logs/
 models/yolov8n.pt
 chroma_data/
 .DS_Store
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/.env*.local
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/.env*.local
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# Reports (لا نرفع التقارير الداخلية)
+reports/*.md
+!reports/README.md

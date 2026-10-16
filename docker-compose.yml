@@ -4,7 +4,7 @@ services:
     container_name: surveillance-postgres
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: securepassword123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in .env (see .env.example)}
       POSTGRES_DB: surveillance
     ports:
       - "5432:5432"
@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile.agent
     container_name: surveillance-agent
     environment:
-      - DATABASE_URL=postgresql+asyncpg://admin:securepassword123@postgres:5432/surveillance
+      - DATABASE_URL=postgresql+asyncpg://admin:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in .env (see .env.example)}@postgres:5432/surveillance
       - REDIS_URL=redis://redis:6379
     volumes:
       - ./alerts:/app/alerts

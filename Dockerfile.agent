@@ -23,6 +23,8 @@ RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 # نسخ الكود
 COPY src/ ./src/
 COPY main.py .
-COPY .env .
+# لا نسخ ملف .env (يحتوي أسراراً) — نأخذ القالب فقط، والقيم الحقيقية تأتي
+# من بيئة docker-compose وملف .env المُحمَّل وقت التشغيل.
+COPY .env.example .env
 
 CMD ["python", "main.py"]
