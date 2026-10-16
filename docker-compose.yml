@@ -59,6 +59,36 @@ services:
           cpus: '4'
           memory: 4G
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: surveillance-api
+    environment:
+      - PORT=8090
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-surveillance_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-surveillance_db}
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./logs:/app/logs
+      - ./alerts:/app/alerts
+      - ./.env:/app/.env:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - surveillance_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
 networks:
   surveillance_net:
     driver: bridge

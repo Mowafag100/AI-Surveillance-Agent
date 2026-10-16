@@ -11,9 +11,10 @@ if [ -f "requirements.txt" ]; then
     pip install -r requirements.txt
 fi
 
-if [ "$1" == "web" ]; then
-    echo "🚀 Starting AI Surveillance Agent..."
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+if [ "$1" == "api" ]; then
+    echo "🚀 Starting AI Surveillance API..."
+    pip install fastapi "uvicorn[standard]"
+    uvicorn src.api:app --host 0.0.0.0 --port "${PORT:-8090}" --reload
 else
-    echo "Usage: ./run.sh web"
+    echo "Usage: ./run.sh api"
 fi
