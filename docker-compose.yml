@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - set it in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-surveillance_db}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
     image: redis:alpine
     container_name: surveillance-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -69,7 +69,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-surveillance_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-surveillance_db}
       - REDIS_URL=redis://redis:6379
     ports:
-      - "8090:8090"
+      - "8095:8090"
     volumes:
       - ./logs:/app/logs
       - ./alerts:/app/alerts
