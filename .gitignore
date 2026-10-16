@@ -1,34 +1,83 @@
-venv/
-__pycache__/
-*.pyc
+# ==========================================
+# AI Surveillance Agent - .gitignore
+# ==========================================
+
+# ----- Secrets (حرج جداً) -----
 .env
+.env.*
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# ----- Python -----
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# ----- ML Models (ملفات كبيرة) -----
+*.pt
+*.pth
+*.onnx
+*.h5
+*.tflite
+models/*.pt
+models/*.pth
+models/*.onnx
+
+# ----- Data & Logs -----
 alerts/
 logs/
 *.log
-models/yolov8n.pt
+*.jsonl
 chroma_data/
-.DS_Store
+data/
 
-# Frontend (Next.js)
+# ----- Frontend (Next.js) -----
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.*
 frontend/.env.local
 frontend/.env*.local
+!frontend/.env.example
 frontend/*.tsbuildinfo
 frontend/next-env.d.ts
 
-# Frontend (Next.js)
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/build/
-frontend/.env.local
-frontend/.env*.local
-frontend/*.tsbuildinfo
-frontend/next-env.d.ts
+# ----- Root Node (إن وُجد) -----
+node_modules/
+.next/
+.npm/
+*.tsbuildinfo
 
-# Reports (لا نرفع التقارير الداخلية)
+# ----- Reports (تقارير داخلية) -----
 reports/*.md
+reports/*.txt
 !reports/README.md
+
+# ----- IDE & OS -----
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- Backup files -----
+*.bak
+*.backup
+*~
+*.orig
