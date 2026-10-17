@@ -37,6 +37,8 @@ models/*.onnx
 # ----- Data & Logs -----
 alerts/
 logs/
+config.json
+config.json.tmp
 *.log
 *.jsonl
 chroma_data/

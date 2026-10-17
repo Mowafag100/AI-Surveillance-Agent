@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -7,11 +8,17 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from src.auth import CurrentUser, SuperUser, alias_router, router as auth_router
+from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 EVENTS_FILE = BASE_DIR / "logs" / "events.jsonl"
 ALERTS_DIR = (BASE_DIR / "alerts").resolve()
 
 app = FastAPI(title="AI Surveillance API", version="1.0")
+
+app.include_router(auth_router)
+app.include_router(alias_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +65,98 @@ def _find_event(event_id: int) -> dict[str, Any] | None:
 async def health() -> dict[str, str]:
     """فحوصاة الخادم"""
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
+
+def _mask_secret(value: Any) -> str:
+    """إخفاء التوكن جزئياً: أول 4 أحرف فقط"""
+    text = str(value) if value else ""
+    return f"{text[:4]}****" if text else ""
+
+
+def _mask_settings() -> dict[str, Any]:
+    """عرض الإعدادات الحالية مع إخفاء التوكنات"""
+    masked: dict[str, Any] = {}
+    for attr in _SETTINGS:
+        value = getattr(Config, attr)
+        if attr in ("TELEGRAM_BOT_TOKEN",):
+            masked[attr] = _mask_secret(value)
+        else:
+            masked[attr] = value
+    return masked
+
+
+def _write_json_config_atomic(overrides: dict[str, Any]) -> None:
+    """كتابة config.json: ذرّية (tmp + replace) محلياً، وكتابة مباشرة داخل
+    الحاوية لأن config.json مُوحَّد مع ملف واحد من المضيف (لا يمكن استبدال
+    نقطة الحجب mountpoint — خطأ errno 16 Device or resource busy)."""
+    import tempfile
+
+    CONFIG_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=CONFIG_JSON_PATH.parent,
+            prefix="config.json.",
+            suffix=".tmp"
+        )
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
+                json.dump(overrides, handle, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, CONFIG_JSON_PATH)
+        except OSError:
+            Path(tmp_path).unlink(missing_ok=True)
+            raise
+    except OSError:
+        # الوضع داخل الحاوية: كتابة مباشرة إذا كانت الملف (نفسنا file bind mount)
+        with CONFIG_JSON_PATH.open("w", encoding="utf-8") as handle:
+            json.dump(overrides, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+
+@app.post("/api/settings")
+async def update_settings(payload: dict[str, Any], admin_user: SuperUser) -> dict[str, Any]:
+    """تحديث config.json — يتطلب مستخدماً مفعّلاً بصلاحيات المشرف (JWT)"""
+    # قبول المفاتيح المعروفة فقط، والتحقق من صحة الأنواع قبل الحفظ
+    allowed = set(_SETTINGS)
+    unknown = [key for key in payload if key not in allowed]
+    if unknown:
+        raise HTTPException(
+            status_code=400, detail=f"مفاتيح غير معروفة: {', '.join(sorted(unknown))}"
+        )
+
+    # التحقق من صحة القيم (محاكاة التحويل دون تعديل الحالة)
+    for key, value in payload.items():
+        parser = _SETTINGS[key][1]
+        try:
+            parser(value)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=400, detail=f"قيمة غير صالحة لـ {key}: {value!r}"
+            ) from exc
+
+    # دمج التعديلات فوق الإعدادات الموجودة (الحفاظ على المفاتيح الأخرى)
+    current = load_json_config()
+    current.update(payload)
+
+    try:
+        _write_json_config_atomic(current)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"تعذّر كتابة config.json: {exc}"
+        ) from exc
+
+    # تحميل فوري للعملية الحالية (حاوية API)، والوكيل يلتقطها عبر Hot Reload
+    Config.reload()
+    return {"status": "updated", "keys": sorted(payload)}
+
+
+# ------------------- Read endpoints -------------------
+
+
+@app.get("/api/settings")
+async def get_settings(current_user: CurrentUser) -> dict[str, Any]:
+    """الإعدادات الحالية مع إخفاء التوكن جزئياً — تتطلب مصادقة"""
+    return _mask_settings()
 
 
 @app.get("/api/events")
@@ -110,10 +209,15 @@ async def get_event_image(event_id: int) -> FileResponse:
 
 @app.get("/api/cameras")
 async def get_cameras() -> list[dict[str, Any]]:
-    """قائمة الكاميرات وحالتها (بيانات محاكاة)"""
+    """القائمة الحقيقية من config.json (مع توافق خلفي نحو CAMERA_URL القديم)"""
     return [
-        {"id": 1, "name": "Gate", "status": "online"},
-        {"id": 2, "name": "Corridor", "status": "online"},
+        {
+            "id": int(camera.get("id", index + 1)),
+            "name": str(camera.get("name") or f"Camera {index + 1}"),
+            "status": "online",
+            "url": str(camera.get("url") or ""),
+        }
+        for index, camera in enumerate(Config.get_cameras())
     ]
 
 

@@ -4,6 +4,9 @@ WORKDIR /app
 
 # حزم الواجهة الخلفية فقط (requirements.txt يحوي تبعيات ثقيلة لا نريدها في صورة API)
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" pydantic
+# تبعيات المصادقة (User model + JWT + bcrypt)
+COPY requirements.auth.txt .
+RUN pip install --no-cache-dir -r requirements.auth.txt
 
 COPY src/ ./src/
 COPY main.py .
