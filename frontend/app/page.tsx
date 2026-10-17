@@ -165,8 +165,18 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* قائمة الأحداث */}
-        <h2 className="text-xl font-semibold mb-4">📋 آخر الأحداث</h2>
+        {/* قائمة الأحدث */}
+        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+          <h2 className="text-xl font-semibold">📋 آخر الأحداث</h2>
+          {/* التحميل عبر Route Handler (نفس النطاق يُرسل كوكي الـ session تلقائياً) */}
+          <a
+            href="/api/reports/export"
+            className="h-9 inline-flex items-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
+            download
+          >
+            ⬇️ تصدير الأحداث (CSV)
+          </a>
+        </div>
         <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
           {events.length === 0 ? (
             <p className="text-gray-400 p-4 text-center">لا توجد أحداث بعد</p>

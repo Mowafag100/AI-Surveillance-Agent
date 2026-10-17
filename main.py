@@ -142,13 +142,15 @@ def main():
                 if worker.is_alive():
                     logger.warning(f"⚠️ الثريد [{worker.camera_name}] لم ينتهِ بعد")
 
-        # 2) تغيير الرابط داخل نفس الهوية → إعادة اتصال حية
+        # 2) تغيير الرابط داخل نفس الهوية → تبديل حي دون حجب:
+        #    تحرير القديم وضبط الرابط، وثريد الكاميرا يعيد الاتصال بنفسه
+        #    (reconnect=False — وألا تسدّ reconcile على رابط ميت لانهائياً)
         fresh = {key: spec for key, spec in current.items() if key in workers}
         for key, spec in fresh.items():
             worker = workers[key]
             new_url = str(spec.get("url") or "")
             if new_url and new_url != worker.camera.url:
-                worker.camera.update_url(new_url)
+                worker.camera.update_url(new_url, reconnect=False)
 
         # 3) فتح الجديد
         for key, spec in current.items():

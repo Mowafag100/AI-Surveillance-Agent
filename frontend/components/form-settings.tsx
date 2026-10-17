@@ -14,12 +14,58 @@ interface CameraRow {
   url: string;
 }
 
+/** حقل رقمي موحّد (إحداثيات المنطقة/التوقيت/زمن البقاء) */
+function ZoneField({
+  fieldKey,
+  label,
+  defaultValue,
+  step,
+  min,
+  max,
+  wide,
+}: {
+  fieldKey: string;
+  label: string;
+  defaultValue: number;
+  step?: string;
+  min?: number;
+  max?: number;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? "col-span-2" : undefined}>
+      <label
+        htmlFor={fieldKey}
+        className="block text-xs font-medium text-gray-300 mb-1"
+      >
+        {label}
+      </label>
+      <input
+        id={fieldKey}
+        name={fieldKey}
+        type="number"
+        step={step}
+        min={min}
+        max={max}
+        autoComplete="off"
+        defaultValue={defaultValue}
+        className={`rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-teal-500 focus:outline-none ${
+          wide ? "w-full" : "w-full"
+        }`}
+      />
+    </div>
+  );
+}
+
 interface FormSettingsProps {
   /** القيم الحقيقية المقروءة من GET /api/settings (توكن بوت التلغرام يستثنى مقنّعاً) */
   initial: {
     cameras: CameraRow[];
     telegramChatId: string;
     zoneDwellTime: number;
+    zone: { tlx: number; tly: number; brx: number; bry: number };
+    alerts: { startHour: number; endHour: number };
+    modelSize: string;
   };
 }
 
@@ -53,8 +99,11 @@ export default function FormSettings({ initial }: FormSettingsProps) {
     // autoComplete="off" على النموذج كلياً: التعبئ في حقل TELEGRAM_CHAT_ID كان
     // ناتجاً من تخمين Chrome لنموذج الدخول (بوجود type=password)+ بيانات مصادفة
     <form action={formAction} autoComplete="off" className="space-y-5">
-      {/* عدّاد الصفوف يحمل عدد الكاميرات النهائي عند الحفظ (بعد الحذف/الإضافة) */}
-      <input type="hidden" name="CAMERAS_COUNT" value={cameras.length} />
+      {/* ===== الكاميرات ===== */}
+      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-teal-300">📹 الكاميرات</h3>
+        {/* عدّاد الصفوف يحمل عدد الكاميرات النهائي عند الحفظ (بعد الحذف/الإضافة) */}
+        <input type="hidden" name="CAMERAS_COUNT" value={cameras.length} />
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -134,65 +183,121 @@ export default function FormSettings({ initial }: FormSettingsProps) {
           (Hot Reload) دون إعادة تشغيل.
         </p>
       </div>
-
-      <div>
-        <label
-          htmlFor="TELEGRAM_BOT_TOKEN"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          توكن بوت التلغرام (TELEGRAM_BOT_TOKEN)
-        </label>
-        <input
-          id="TELEGRAM_BOT_TOKEN"
-          name="TELEGRAM_BOT_TOKEN"
-          type="password"
-          // new-password يوقف تخمين Chrome بأن هذا "نموذج تسجيل دخول" —
-          // ما كان يعبّئ اسم المستخدم المحفوظ في الحقول النصية المجاورة
-          autoComplete="new-password"
-          placeholder="اتركه فارغاً للإبقاء على القيمة الحالية"
-          disabled={isPending}
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
-        />
       </div>
 
-      <div>
-        <label
-          htmlFor="TELEGRAM_CHAT_ID"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          معرّف محادثة التلغرام (TELEGRAM_CHAT_ID)
-        </label>
-        <input
-          id="TELEGRAM_CHAT_ID"
-          name="TELEGRAM_CHAT_ID"
-          type="text"
-          autoComplete="off"
-          // القيمة الحقيقية من الـ API (غير سرية — تُعرض كما هي)
-          defaultValue={initial.telegramChatId}
-          placeholder={initial.telegramChatId ? "" : "اتركه فارغاً للإبقاء على القيمة الحالية"}
-          disabled={isPending}
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
-        />
-      </div>
-
-      <div>
-        <label
-          htmlFor="ZONE_DWELL_TIME"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          زمن البقاء في المنطقة الحساسة بالثواني (ZONE_DWELL_TIME)
-        </label>
-        <input
-          id="ZONE_DWELL_TIME"
-          name="ZONE_DWELL_TIME"
-          type="number"
-          step="0.5"
-          min="0"
-          autoComplete="off"
+      {/* ===== المنطقة الحساسة ===== */}
+      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-teal-300">📍 المنطقة الحساسة</h3>
+        <p className="text-xs text-gray-500">
+          إحداثيات المستطيل على إطار بمقاس 640×480 (تُصغَّر كل الاتصالات تلقائياً) —
+          التسلُّل يُحتسب حين يدخل مركز الشخص هذا المستطيل.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <ZoneField fieldKey="ZONE_TOP_LEFT_X" label="أعلى-يسار X" defaultValue={initial.zone.tlx} />
+          <ZoneField fieldKey="ZONE_TOP_LEFT_Y" label="أعلى-يسار Y" defaultValue={initial.zone.tly} />
+          <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_X" label="أسفل-يمين X" defaultValue={initial.zone.brx} />
+          <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_Y" label="أسفل-يمين Y" defaultValue={initial.zone.bry} />
+        </div>
+        <ZoneField
+          fieldKey="ZONE_DWELL_TIME"
+          label="زمن البقاء داخل المنطقة بالثواني (ZONE_DWELL_TIME)"
           defaultValue={initial.zoneDwellTime}
+          step="0.5"
+          wide
+        />
+      </div>
+
+      {/* ===== أوقات التنبيه ===== */}
+      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-teal-300">⏰ أوقات التنبيه</h3>
+        <p className="text-xs text-gray-500">
+          ساعات 0-23. إذا كانت (إلى) أقل من (من) فالنافذة تعبر منتصف الليل.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <ZoneField
+            fieldKey="ALERT_START_HOUR"
+            label="من الساعة (ALERT_START_HOUR)"
+            defaultValue={initial.alerts.startHour}
+            min={0}
+            max={23}
+          />
+          <ZoneField
+            fieldKey="ALERT_END_HOUR"
+            label="إلى الساعة (ALERT_END_HOUR)"
+            defaultValue={initial.alerts.endHour}
+            min={0}
+            max={23}
+          />
+        </div>
+      </div>
+
+      {/* ===== الذكاء الاصطناعي ===== */}
+      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-teal-300">🧠 الذكاء الاصطناعي</h3>
+        <label
+          htmlFor="MODEL_SIZE"
+          className="block text-sm font-medium text-gray-300 mb-1"
+        >
+          حجم النموذج (MODEL_SIZE)
+        </label>
+        <select
+          id="MODEL_SIZE"
+          name="MODEL_SIZE"
+          defaultValue={initial.modelSize}
           disabled={isPending}
           className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-teal-500 focus:outline-none"
-        />
+        >
+          <option value="n">yolov8n — خفيف وسريع (افتراضي)</option>
+          <option value="s">yolov8s — دقة أعلى</option>
+          <option value="m">yolov8m — أعلى دقة</option>
+        </select>
+        <p className="mt-1 text-xs text-gray-500">
+          ⚠️ النماذج الأكبر أدق لكنها تحتاج معالجاً أقوى — يُبدّل حيّاً عند الحفظ
+          دون إعادة تشغيل الوكيل.
+        </p>
+      </div>
+
+      {/* ===== التلغرام ===== */}
+      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-teal-300">📨 التلغرام</h3>
+        <div>
+          <label
+            htmlFor="TELEGRAM_BOT_TOKEN"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
+            توكن بوت التلغرام (TELEGRAM_BOT_TOKEN)
+          </label>
+          <input
+            id="TELEGRAM_BOT_TOKEN"
+            name="TELEGRAM_BOT_TOKEN"
+            type="password"
+            // new-password يوقف تخمين Chrome بأن هذا "نموذج تسجيل دخول" —
+            // ما كان يعبّئ اسم المستخدم المحفوظ في الحقول النصية المجاورة
+            autoComplete="new-password"
+            placeholder="اتركه فارغاً للإبقاء على القيمة الحالية"
+            disabled={isPending}
+            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="TELEGRAM_CHAT_ID"
+            className="block text-sm font-medium text-gray-300 mb-1"
+          >
+            معرّف محادثة التلغرام (TELEGRAM_CHAT_ID)
+          </label>
+          <input
+            id="TELEGRAM_CHAT_ID"
+            name="TELEGRAM_CHAT_ID"
+            type="text"
+            autoComplete="off"
+            // القيمة الحقيقية من الـ API (غير سرية — تُعرض كما هي)
+            defaultValue={initial.telegramChatId}
+            placeholder={initial.telegramChatId ? "" : "اتركه فارغاً للإبقاء على القيمة الحالية"}
+            disabled={isPending}
+            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+          />
+        </div>
       </div>
 
       {state.ok && (

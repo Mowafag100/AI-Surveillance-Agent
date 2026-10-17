@@ -1,4 +1,6 @@
 from datetime import datetime
+import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -6,7 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from src.auth import CurrentUser, SuperUser, alias_router, router as auth_router
 from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
@@ -156,6 +158,8 @@ async def update_settings(payload: dict[str, Any], admin_user: SuperUser) -> dic
 @app.get("/api/settings")
 async def get_settings(current_user: CurrentUser) -> dict[str, Any]:
     """الإعدادات الحالية مع إخفاء التوكن جزئياً — تتطلب مصادقة"""
+    # تعديلات من خارج عملية POST نفسها (يدوياً/حاوية أخرى) تُلتقط هنا
+    Config.ensure_fresh()
     return _mask_settings()
 
 
@@ -210,6 +214,7 @@ async def get_event_image(event_id: int) -> FileResponse:
 @app.get("/api/cameras")
 async def get_cameras() -> list[dict[str, Any]]:
     """القائمة الحقيقية من config.json (مع توافق خلفي نحو CAMERA_URL القديم)"""
+    Config.ensure_fresh()
     return [
         {
             "id": int(camera.get("id", index + 1)),
@@ -219,6 +224,34 @@ async def get_cameras() -> list[dict[str, Any]]:
         }
         for index, camera in enumerate(Config.get_cameras())
     ]
+
+
+@app.get("/api/reports/export")
+async def export_reports(admin_user: SuperUser) -> StreamingResponse:
+    """تصدير الأحداث كملف CSV (utf-8-sig لفتحه بـ Excel مع العربية) — للمشرفين فقط"""
+    buffer = io.StringIO()
+    # BOM يضمن قراءة العربيات في Excel مباشرة
+    buffer.write("\ufeff")
+    writer = csv.writer(buffer)
+    writer.writerow(["timestamp", "event", "camera_id", "camera_name", "details", "image"])
+    for event in _read_events():
+        details = event.get("details") or {}
+        writer.writerow([
+            event.get("timestamp", ""),
+            event.get("event", ""),
+            details.get("camera_id", ""),
+            details.get("camera_name", ""),
+            json.dumps(details, ensure_ascii=False) if details else "",
+            event.get("image", ""),
+        ])
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": 'attachment; filename="events_report.csv"',
+        },
+    )
 
 
 @app.get("/api/stats/daily")

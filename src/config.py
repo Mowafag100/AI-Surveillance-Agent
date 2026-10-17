@@ -41,6 +41,27 @@ def _parse_cameras(value: Any) -> list[dict[str, Any]]:
     return cameras
 
 
+def _parse_model_size(value: Any) -> str:
+    """مضبّط إعداد MODEL_SIZE — يقبل الحرف n/s/m أو كامل الاسم
+    yolov8n/yolov8s/yolov8m ويعيد الحرف فقط ضمن {n,s,m}."""
+    text = str(value or "").strip().lower()
+    for prefix in ("yolov8", "yolo"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    text = text.replace(".pt", "")
+    if text not in ("n", "s", "m"):
+        raise ValueError("MODEL_SIZE يجب أن يكون أحد: n، s، m")
+    return text
+
+
+def _parse_hour(value: Any) -> int:
+    """ساعة ضمن 0-23 — النافذة تعبر منتصف الليل حين end < start (مسموح)"""
+    hour = int(value)
+    if not 0 <= hour <= 23:
+        raise ValueError("الساعة يجب أن تكون ضمن 0-23")
+    return hour
+
+
 # تعريف الإعدادات الديناميكية القابلة للتعديل عبر config.json أو الـ API
 # الصيغة: الاسم داخل Config -> (اسم متغير البيئة في .env، دالة التحويل، القيمة الافتراضية)
 _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
@@ -53,6 +74,7 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     # الكشف والتنبيه
     "ALERT_COOLDOWN": ("ALERT_COOLDOWN", int, 30),
     "MIN_CONFIDENCE": ("MIN_CONFIDENCE", float, 0.5),
+    "MODEL_SIZE": ("MODEL_SIZE", _parse_model_size, "n"),
     "FALL_ASPECT_RATIO_THRESHOLD": ("FALL_ASPECT_RATIO_THRESHOLD", float, 1.2),
     "FIGHT_SPEED_THRESHOLD": ("FIGHT_SPEED_THRESHOLD", int, 100),
     "FIGHT_DISTANCE_THRESHOLD": ("FIGHT_DISTANCE_THRESHOLD", int, 50),
@@ -63,8 +85,8 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     "ZONE_BOTTOM_RIGHT_X": ("ZONE_BOTTOM_RIGHT_X", int, 400),
     "ZONE_BOTTOM_RIGHT_Y": ("ZONE_BOTTOM_RIGHT_Y", int, 300),
     # التوقيت
-    "ALERT_START_HOUR": ("ALERT_START_HOUR", int, 0),
-    "ALERT_END_HOUR": ("ALERT_END_HOUR", int, 23),
+    "ALERT_START_HOUR": ("ALERT_START_HOUR", _parse_hour, 0),
+    "ALERT_END_HOUR": ("ALERT_END_HOUR", _parse_hour, 23),
     # عرض نافذة الفيديو (false في Docker/الخوادم)
     "SHOW_PREVIEW": ("SHOW_PREVIEW", lambda v: str(v).lower() in ("1", "true", "yes"), False),
 }
@@ -97,6 +119,15 @@ class Config:
     MODEL_PATH = "models/yolov8n.pt"
     ALERTS_DIR = "alerts"
     LOGS_DIR = "logs"
+    _applied_mtime: float = 0.0
+
+    @classmethod
+    def ensure_fresh(cls) -> None:
+        """لتعديلات config.json من خارج عملية POST نفسها (يدوياً/حاوية أخرى):
+        مقارنة mtime المحفوظ مع الحالي — إعادة تحميل مرة واحدة عند الاختلاف فقط."""
+        current_mtime = get_config_mtime()
+        if current_mtime != cls._applied_mtime:
+            cls.reload()
 
     @classmethod
     def get_cameras(cls) -> list[dict[str, Any]]:
@@ -130,6 +161,7 @@ class Config:
                 logger.warning(f"⚠️ قيمة غير صالحة للإعداد {attr}: {source!r} — تم تجاهلها")
                 value = default
             setattr(cls, attr, value)
+        cls._applied_mtime = get_config_mtime()
 
     @classmethod
     def reload(cls) -> None:

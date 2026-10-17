@@ -45,14 +45,22 @@ class Camera:
             ret, frame = self.cap.read()
         return frame if ret else None
 
-    def update_url(self, new_url):
-        """تغيير رابط الكاميرا وإعادة الاتصال (Hot Reload)"""
+    def update_url(self, new_url, reconnect=True):
+        """تغيير رابط الكاميرا (Hot Reload).
+
+        reconnect=True (السلوك القديم): إصدار فوري وإعادة اتصال متزامنة
+        (قد تسدّ على روابط ميتة). reconnect=False: فقط تحرير القديم
+        وضبط الرابط الجديد — خيط مالك الكاميرا يعيد الاتصال عبر حلقة
+        القراءة التالية (آمن مع reconcile متعدد الكاميرات)."""
         if not new_url or new_url == self.url:
             return False
         logger.info(f"📷 تغيير رابط الكاميرا: {self.url} → {new_url}")
         self.release()
         self.url = new_url
-        return self.connect()
+        if reconnect and self.stop_event is None:
+            # السلوك التاريخي (اتصال متزامن) يبقى كاميراً فردية بلا stop
+            return self.connect()
+        return True
 
     def release(self):
         if self.cap:

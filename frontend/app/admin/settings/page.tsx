@@ -40,7 +40,7 @@ export default async function AdminSettingsPage() {
                       url: String(settings["CAMERA_URL"]),
                     },
                   ]
-                : [], // التمرير maxlen: FormSettings يعرض صف editing فارغاً إن كانت فراغاً
+                : [], // FormSettings يعرض صفاً فارغاً واحداً عندما تكون القائمة فارغة
             telegramChatId: typeof settings["TELEGRAM_CHAT_ID"] === "string"
               ? settings["TELEGRAM_CHAT_ID"]
               : "",
@@ -48,6 +48,31 @@ export default async function AdminSettingsPage() {
               typeof settings["ZONE_DWELL_TIME"] === "number"
                 ? settings["ZONE_DWELL_TIME"]
                 : 2,
+            zone: {
+              tlx: typeof settings["ZONE_TOP_LEFT_X"] === "number"
+                ? settings["ZONE_TOP_LEFT_X"]
+                : 100,
+              tly: typeof settings["ZONE_TOP_LEFT_Y"] === "number"
+                ? settings["ZONE_TOP_LEFT_Y"]
+                : 100,
+              brx: typeof settings["ZONE_BOTTOM_RIGHT_X"] === "number"
+                ? settings["ZONE_BOTTOM_RIGHT_X"]
+                : 400,
+              bry: typeof settings["ZONE_BOTTOM_RIGHT_Y"] === "number"
+                ? settings["ZONE_BOTTOM_RIGHT_Y"]
+                : 300,
+            },
+            alerts: {
+              startHour: typeof settings["ALERT_START_HOUR"] === "number"
+                ? settings["ALERT_START_HOUR"]
+                : 0,
+              endHour: typeof settings["ALERT_END_HOUR"] === "number"
+                ? settings["ALERT_END_HOUR"]
+                : 23,
+            },
+            modelSize: typeof settings["MODEL_SIZE"] === "string"
+              ? settings["MODEL_SIZE"]
+              : "n",
           }}
         />
       </div>

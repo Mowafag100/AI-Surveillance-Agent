@@ -25,6 +25,44 @@ export async function saveSettingsAction(
     payload.ZONE_DWELL_TIME = zoneDwell;
   }
 
+  // ==== المنطقة الحساسة (إحداثيات على إطار 640×480) ====
+  for (const fieldKey of ["ZONE_TOP_LEFT_X", "ZONE_TOP_LEFT_Y", "ZONE_BOTTOM_RIGHT_X", "ZONE_BOTTOM_RIGHT_Y"] as const) {
+    const rawValue = String(formData.get(fieldKey) ?? "").trim();
+    if (rawValue === "") continue; // يُترك الإعداد الحالي كما هو
+    const parsedValue = Number(rawValue);
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+      return { error: `${fieldKey} يجب أن يكون رقماً موجباً` };
+    }
+    payload[fieldKey] = Math.round(parsedValue);
+  }
+  const tlx = Number(formData.get("ZONE_TOP_LEFT_X") ?? NaN);
+  const brx = Number(formData.get("ZONE_BOTTOM_RIGHT_X") ?? NaN);
+  const tly = Number(formData.get("ZONE_TOP_LEFT_Y") ?? NaN);
+  const bry = Number(formData.get("ZONE_BOTTOM_RIGHT_Y") ?? NaN);
+  if ([tlx, brx, tly, bry].every(Number.isFinite)) {
+    if (tlx >= brx) return { error: "أعلى-يسار X يجب أن يكون أصغر من أسفل-يمين X" };
+    if (tly >= bry) return { error: "أعلى-يسار Y يجب أن يكون أصغر من أسفل-يمين Y" };
+  }
+
+  // ==== أوقات التنبيه (0-23 — الفترة عبر منتصف الليل مسموحة في agent) ====
+  for (const fieldKey of ["ALERT_START_HOUR", "ALERT_END_HOUR"] as const) {
+    const rawValue = String(formData.get(fieldKey) ?? "").trim();
+    if (rawValue === "") continue;
+    const parsedValue = Number(rawValue);
+    if (!Number.isInteger(parsedValue) || parsedValue < 0 || parsedValue > 23) {
+      return { error: `${fieldKey} يجب أن يكون رقماً صحيحاً ضمن 0-23` };
+    }
+    payload[fieldKey] = parsedValue;
+  }
+
+  // ==== حجم النموذج ====
+  const modelSize = String(formData.get("MODEL_SIZE") ?? "").trim();
+  if (["n", "s", "m"].includes(modelSize)) {
+    payload.MODEL_SIZE = modelSize;
+  } else if (modelSize !== "") {
+    return { error: "MODEL_SIZE يجب أن يكون n أو s أو m" };
+  }
+
   // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير
   const camerasCount = Number(formData.get("CAMERAS_COUNT") ?? "0");
   const cameras: { id: number; name: string; url: string }[] = [];
