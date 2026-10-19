@@ -2,17 +2,21 @@ from datetime import datetime
 import csv
 import io
 import json
+import logging
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 
 from src.auth import CurrentUser, SuperUser, alias_router, router as auth_router
 from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
+
+logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 EVENTS_FILE = BASE_DIR / "logs" / "events.jsonl"
@@ -355,6 +359,139 @@ async def get_cameras_health() -> dict[str, Any]:
         "timeout_sec": health_data.get("timeout_sec"),
         "cameras": cameras,
     }
+
+
+# ------------------- Live View (MJPEG Streaming) -------------------
+
+# تحديد الحدود (boundary) لرسائل multipart/x-mixed-replace
+_STREAM_BOUNDARY = "frame"
+_STREAM_HEADER = (
+    f"--{_STREAM_BOUNDARY}\r\nContent-Type: image/jpeg\r\n\r\n".encode()
+)
+
+
+async def _stream_generator(
+    request: Request,
+    url: str,
+    jpeg_quality: int,
+    max_fps: int,
+    max_failures: int = 30,
+    connect_attempts: int = 10,
+):
+    """مولد بث async يفتح VideoCapture ويبث إطارات JPEG عبر multipart.
+
+    لماذا مولد async بدل المتزامن؟
+    - القراءات الحاجبة (VideoCapture/read/imencode) تذهب إلى asyncio.to_thread
+      فلا تُجمّد حلقة الأحداث (طلبات أخرى مثل /api/cameras/health تبقى سريعة).
+    - uvicorn (spec_version 2.3) يُلغي مولد البث عبر CancelledError عند قطع
+      العميل (listen_for_disconnect بالتوازي في StreamingResponse)، فتعمل كتلة
+      finally حتماً وتحرر الكاميرا (cap.release) دون انتظار GC. للاطمئنان أكثر
+      نستقصي request.is_disconnected في كل دورة — فبعد فقد العميل تبقى كتابة
+      uvicorn صامتة ولن تُلغي البث تلقائياً.
+    - البث للعرض فقط ولا تمرَّر الإطارات على نموذج YOLO (تخفيف الحمل).
+    """
+    import asyncio
+
+    import cv2
+
+    cap: Any = None
+    failures = 0
+    frame_interval = 1.0 / max_fps if max_fps > 0 else 0.0
+
+    try:
+        while True:
+            # فحص انقطاع العميل أولاً — uvicorn يواصل "الكتابة" بلا فائدة بعد الفقد
+            if await request.is_disconnected():
+                logger.info("ℹ️ قطع عميل مشاهد البث — تحرير الكاميرا")
+                break
+
+            if cap is None:
+                cap = await asyncio.to_thread(cv2.VideoCapture, url)
+                if not (cap and cap.isOpened()):
+                    cap.release()
+                    cap = None
+                    failures += 1
+                    if failures >= connect_attempts:
+                        logger.warning(
+                            f"⚠️ البث انتهى — تعذر فتح الكاميرا ({url})"
+                        )
+                        break
+                    await asyncio.sleep(0.5)
+                    continue
+
+            ret, frame = await asyncio.to_thread(cap.read)
+            if not ret:
+                failures += 1
+                cap.release()
+                cap = None
+                if failures >= max_failures:
+                    logger.warning(
+                        f"⚠️ البث انتهى — {failures} قراءة فاشلة متتالية ({url})"
+                    )
+                    break
+                continue
+
+            failures = 0
+
+            # تصغير حجم الإطار كالوكيل (يقلل النقل على الشبكة)
+            if frame.shape[0] > 480:
+                frame = cv2.resize(frame, (640, 480))
+
+            # ترميز JPEG أيضاً في الخلفية
+            ok, buf = await asyncio.to_thread(
+                cv2.imencode, ".jpg", frame, [
+                    cv2.IMWRITE_JPEG_QUALITY, jpeg_quality
+                ]
+            )
+            if ok:
+                yield _STREAM_HEADER + buf.tobytes() + b"\r\n"
+
+            await asyncio.sleep(frame_interval)
+    except (GeneratorExit, asyncio.CancelledError):
+        # انقطاع العميل (إلغاء الاستجابة) — تحرير الموارد في finally ثم إعادة الرفع
+        logger.info("ℹ️ قطع عميل مشاهد البث — تحرير الكاميرا (إلغاء)")
+        raise
+    finally:
+        if cap is not None:
+            # استدعاء sync قصير — cv2.release سريع (إلغاء لا يعمل داخل finally)
+            cap.release()
+            logger.debug("ℹ️ تم تحرير VideoCapture للكاميرا")
+
+
+@app.get("/api/cameras/{camera_id}/stream")
+async def stream_camera(
+    request: Request,
+    camera_id: int,
+    current_user: CurrentUser,
+    q: int = Query(default=70, ge=10, le=100, description="جودة JPEG"),
+    fps: int = Query(default=10, ge=1, le=30, description="أقصى إطارات بالثانية"),
+) -> StreamingResponse:
+    """البث المباشر MJPEG للكاميرا — يتطلب JWT (Bearer أو كوكي auth_cookie).
+
+    بث مستقل عن خط معالجة YOLO: يفتح اتصالاً مباشراً بالكاميرا
+    ويلقط إطارات JPEG (عرض فقط — بلا استدلال لتخفيف الحمل)."""
+    Config.ensure_fresh()
+    camera = next(
+        (c for c in Config.get_cameras() if int(c.get("id", -1)) == camera_id),
+        None,
+    )
+    if camera is None or not str(camera.get("url") or "").strip():
+        raise HTTPException(status_code=404, detail="Camera not found")
+
+    return StreamingResponse(
+        _stream_generator(
+            request=request,
+            url=str(camera["url"]),
+            jpeg_quality=q,
+            max_fps=fps,
+        ),
+        media_type=f"multipart/x-mixed-replace; boundary={_STREAM_BOUNDARY}",
+        headers={
+            # بلا ترويسات نصية عربية: ترويسات HTTP ترميزها latin-1 حصراً
+            # (اسم كاميرا عربي في X-Camera-Name كان يسبب UnicodeEncodeError وخطأ 500)
+            "Cache-Control": "no-store, no-transform",
+        },
+    )
 
 
 @app.get("/api/reports/export")

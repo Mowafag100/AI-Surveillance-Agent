@@ -74,6 +74,10 @@ export default async function AdminSettingsPage() {
             modelSize: typeof settings["MODEL_SIZE"] === "string"
               ? settings["MODEL_SIZE"]
               : "n",
+            minConfidence:
+              typeof settings["MIN_CONFIDENCE"] === "number"
+                ? settings["MIN_CONFIDENCE"]
+                : 0.3,
             email: {
               enabled: settings["ENABLE_EMAIL_ALERTS"] === true,
               host: typeof settings["SMTP_HOST"] === "string"

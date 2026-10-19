@@ -70,6 +70,7 @@ interface FormSettingsProps {
     zone: { tlx: number; tly: number; brx: number; bry: number };
     alerts: { startHour: number; endHour: number };
     modelSize: string;
+    minConfidence: number;
     email: {
       enabled: boolean;
       host: string;
@@ -275,6 +276,17 @@ export default function FormSettings({ initial }: FormSettingsProps) {
         </select>
         <p className="mt-1 text-xs text-gray-500">
           {t("modelHint")}
+        </p>
+        <ZoneField
+          fieldKey="MIN_CONFIDENCE"
+          label={t("minConfidenceLabel")}
+          defaultValue={initial.minConfidence}
+          step="0.05"
+          min={0.1}
+          max={0.9}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          {t("minConfidenceHint")}
         </p>
       </div>
 

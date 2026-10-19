@@ -54,6 +54,12 @@ interface SessionInfo {
   is_superuser?: boolean;
 }
 
+// نافذة البث المباشر: الكاميرا المفتوحة في Modal (فاتورة img = MJPEG عبر وكيل الدخول)
+interface LiveViewTarget {
+  id: number;
+  name: string;
+}
+
 const EVENT_META: Record<EventType, { badge: string; key: string }> = {
   fall: { badge: "bg-red-900/50 text-red-300", key: "fall" },
   fight: { badge: "bg-yellow-900/50 text-yellow-300", key: "fight" },
@@ -121,7 +127,19 @@ export default function Dashboard() {
   const [hideAcknowledged, setHideAcknowledged] = useState(false);
   const [pendingEventId, setPendingEventId] = useState<number | null>(null);
   const [ackError, setAckError] = useState<string | null>(null);
+  const [liveView, setLiveView] = useState<LiveViewTarget | null>(null);
+  const [streamError, setStreamError] = useState(false);
   const [, startTransition] = useTransition();
+
+  // ESC يغلق نافذة البث (بجانب زر الإغلاق والنقر خارج الصندوق)
+  useEffect(() => {
+    if (!liveView) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLiveView(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [liveView]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -387,12 +405,65 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 mt-2">
                     {t("lastSeen")}: {formatLastSeen(camera.last_seen)}
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStreamError(false);
+                      setLiveView({ id: camera.id, name: camera.name });
+                    }}
+                    className="mt-3 w-full rounded-md bg-indigo-700/70 px-3 py-1.5 text-sm text-white hover:bg-indigo-600 transition"
+                  >
+                    {t("liveView")}
+                  </button>
                 </div>
               ))
             )}
           </div>
         </div>
       </div>
+
+      {/* نافذة البث المباشر (MJPEG عبر وكيل /api/cameras/[id]/stream بنفس نطاق الجلسة) */}
+      {liveView && (
+        <div
+          className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLiveView(null)}
+        >
+          <div
+            className="w-full max-w-3xl rounded-xl border border-gray-700 bg-gray-800 overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 gap-2 flex-wrap">
+              <span className="flex items-center gap-2 text-sm font-medium text-white">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse inline-block" />
+                {liveView.name} — {t("liveViewTitle")}
+              </span>
+              <span className="flex items-center gap-3 flex-wrap">
+                {streamError && (
+                  <span className="text-xs text-red-300">{t("streamError")}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLiveView(null)}
+                  className="rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition"
+                >
+                  ✕ {t("closeModal")}
+                </button>
+              </span>
+            </div>
+            {/* بإزالة الـ img (unmount) يُقطع الطلب ويُحرر VideoCapture في الخادم */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- <Image/> لا يدعم تيار multipart/x-mixed-replace المتواصل */}
+            <img
+              key={liveView.id}
+              src={`/api/cameras/${liveView.id}/stream`}
+              alt={liveView.name}
+              onError={() => setStreamError(true)}
+              className="w-full bg-black"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

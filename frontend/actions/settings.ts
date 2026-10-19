@@ -96,6 +96,20 @@ export async function saveSettingsAction(
     return { error: "MODEL_SIZE يجب أن يكون n أو s أو m" };
   }
 
+  // ==== الحد الأدنى للثقة (0.1-0.9) ====
+  const minConfRaw = String(formData.get("MIN_CONFIDENCE") ?? "").trim();
+  if (minConfRaw !== "") {
+    const minConf = Number(minConfRaw);
+    if (
+      !Number.isFinite(minConf) ||
+      minConf < 0.1 ||
+      minConf > 0.9
+    ) {
+      return { error: "MIN_CONFIDENCE يجب أن يكون رقماً ضمن 0.1-0.9" };
+    }
+    payload.MIN_CONFIDENCE = minConf;
+  }
+
   // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير
   const camerasCount = Number(formData.get("CAMERAS_COUNT") ?? "0");
   const cameras: { id: number; name: string; url: string }[] = [];

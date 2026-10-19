@@ -81,7 +81,7 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     "TELEGRAM_CHAT_ID": ("TELEGRAM_CHAT_ID", str, ""),
     # الكشف والتنبيه
     "ALERT_COOLDOWN": ("ALERT_COOLDOWN", int, 30),
-    "MIN_CONFIDENCE": ("MIN_CONFIDENCE", float, 0.5),
+    "MIN_CONFIDENCE": ("MIN_CONFIDENCE", float, 0.3),
     "MODEL_SIZE": ("MODEL_SIZE", _parse_model_size, "n"),
     "FALL_ASPECT_RATIO_THRESHOLD": ("FALL_ASPECT_RATIO_THRESHOLD", float, 1.2),
     "FIGHT_SPEED_THRESHOLD": ("FIGHT_SPEED_THRESHOLD", int, 100),
