@@ -3,6 +3,7 @@ import csv
 import io
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,11 @@ from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
 BASE_DIR = Path(__file__).resolve().parent.parent
 EVENTS_FILE = BASE_DIR / "logs" / "events.jsonl"
 ALERTS_DIR = (BASE_DIR / "alerts").resolve()
+CAMERA_HEALTH_FILE = BASE_DIR / "logs" / "camera_health.json"
+ACKNOWLEDGED_FILE = BASE_DIR / "logs" / "acknowledged.json"
+
+# يحمي كتابة logs/acknowledged.json من تزامن الطلبات
+_ack_lock = threading.Lock()
 
 app = FastAPI(title="AI Surveillance API", version="1.0")
 
@@ -80,11 +86,47 @@ def _mask_settings() -> dict[str, Any]:
     masked: dict[str, Any] = {}
     for attr in _SETTINGS:
         value = getattr(Config, attr)
-        if attr in ("TELEGRAM_BOT_TOKEN",):
+        if attr in ("TELEGRAM_BOT_TOKEN", "SMTP_PASSWORD"):
             masked[attr] = _mask_secret(value)
         else:
             masked[attr] = value
     return masked
+
+
+def _read_camera_health() -> dict[str, Any]:
+    """قراءة logs/camera_health.json المكتوب من حاوية agent — {} إن لم يوجد"""
+    try:
+        if CAMERA_HEALTH_FILE.is_file():
+            with CAMERA_HEALTH_FILE.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+                return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+def _read_acknowledged() -> dict[str, Any]:
+    """قراءة logs/acknowledged.json — {event_id: {acknowledged, ack_by, ack_time}}"""
+    try:
+        if ACKNOWLEDGED_FILE.is_file():
+            with ACKNOWLEDGED_FILE.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+                return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        pass
+    return {}
+
+
+def _write_acknowledged_atomic(acks: dict[str, Any]) -> None:
+    """كتابة logs/acknowledged.json دريّة (tmp + replace)"""
+    ACKNOWLEDGED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = ACKNOWLEDGED_FILE.with_suffix(".json.tmp")
+    with _ack_lock:
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(acks, handle, indent=2, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, ACKNOWLEDGED_FILE)
 
 
 def _write_json_config_atomic(overrides: dict[str, Any]) -> None:
@@ -168,9 +210,21 @@ async def get_events(
     limit: int = Query(default=50, ge=1, le=1000),
     camera_id: int | None = Query(default=None),
     event_type: str | None = Query(default=None),
+    acknowledged: bool | None = Query(default=None),
 ) -> list[dict[str, Any]]:
-    """جلب الأحداث الأخيرة مع تصفية اختيارية"""
+    """جلب الأحداث الأخيرة مع تصفية اختيارية:
+    camera_id / event_type / acknowledged (true أو false — غياب المعامل = الكل)"""
     events = _read_events()
+    # دمج حالة التأكيد من logs/acknowledged.json
+    acks = _read_acknowledged()
+    for event in events:
+        ack = acks.get(str(event.get("id")))
+        if isinstance(ack, dict):
+            event["acknowledged"] = bool(ack.get("acknowledged"))
+            event["ack_by"] = ack.get("ack_by")
+            event["ack_time"] = ack.get("ack_time")
+        else:
+            event["acknowledged"] = False
     if camera_id is not None:
         events = [
             e
@@ -183,7 +237,39 @@ async def get_events(
         ]
     if event_type is not None:
         events = [e for e in events if e.get("event") == event_type]
+    if acknowledged is not None:
+        events = [e for e in events if bool(e.get("acknowledged")) is acknowledged]
     return events[-limit:]
+
+
+@app.post("/api/events/{event_id}/acknowledge")
+async def acknowledge_event(event_id: int, admin_user: SuperUser) -> dict[str, Any]:
+    """تأكيد مراجعة حدث (يتطلب JWT مشرف) — يسجّل في logs/acknowledged.json:
+    {id: {acknowledged: true, ack_by: email, ack_time: iso}}"""
+    event = _find_event(event_id)
+    if event is None:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    acks = _read_acknowledged()
+    now_iso = datetime.now().isoformat()
+    acks[str(event_id)] = {
+        "acknowledged": True,
+        "ack_by": admin_user.email,
+        "ack_time": now_iso,
+    }
+    try:
+        _write_acknowledged_atomic(acks)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500, detail=f"تعذّر كتابة ملف التأكيد: {exc}"
+        ) from exc
+
+    return {
+        "id": event_id,
+        "acknowledged": True,
+        "ack_by": admin_user.email,
+        "ack_time": now_iso,
+    }
 
 
 @app.get("/api/events/{event_id}")
@@ -213,17 +299,62 @@ async def get_event_image(event_id: int) -> FileResponse:
 
 @app.get("/api/cameras")
 async def get_cameras() -> list[dict[str, Any]]:
-    """القائمة الحقيقية من config.json (مع توافق خلفي نحو CAMERA_URL القديم)"""
+    """القائمة الحقيقية من config.json (مع توافق خلفي نحو CAMERA_URL القديم).
+    status يُحسب من logs/camera_health.json عند توفره (online/offline/unknown)"""
     Config.ensure_fresh()
+    health_data = _read_camera_health()
+    health_cameras = (
+        health_data.get("cameras") if isinstance(health_data.get("cameras"), dict) else {}
+    )
     return [
         {
             "id": int(camera.get("id", index + 1)),
             "name": str(camera.get("name") or f"Camera {index + 1}"),
-            "status": "online",
+            "status": _camera_status(int(camera.get("id", index + 1)), health_cameras),
             "url": str(camera.get("url") or ""),
         }
         for index, camera in enumerate(Config.get_cameras())
     ]
+
+
+def _camera_status(camera_id: int, health_cameras: dict[str, Any]) -> str:
+    """حالة الكاميرا من خطوط بيانات الصحة — unknown إن لم يصل أي تقرير بعد"""
+    entry = health_cameras.get(str(camera_id))
+    if isinstance(entry, dict) and entry.get("status") in ("online", "offline"):
+        return str(entry["status"])
+    return "unknown"
+
+
+@app.get("/api/cameras/health")
+async def get_cameras_health() -> dict[str, Any]:
+    """حالة صحة الكاميرات من تقارير حاوية agent (logs/camera_health.json):
+    online/offline لكل كاميرا + آخر وقت استلام إطار (last_seen)."""
+    health_data = _read_camera_health()
+    cameras_section = health_data.get("cameras")
+    cameras_section = cameras_section if isinstance(cameras_section, dict) else {}
+
+    cameras: list[dict[str, Any]] = []
+    for camera_id, entry in sorted(cameras_section.items(), key=lambda kv: int(kv[0])):
+        if not isinstance(entry, dict):
+            continue
+        try:
+            numeric_id = int(camera_id)
+        except (TypeError, ValueError):
+            continue
+        cameras.append(
+            {
+                "id": numeric_id,
+                "name": str(entry.get("name") or f"Camera {numeric_id}"),
+                "url": str(entry.get("url") or ""),
+                "status": "online" if entry.get("status") == "online" else "offline",
+                "last_seen": entry.get("last_seen"),
+            }
+        )
+    return {
+        "timestamp": health_data.get("timestamp"),
+        "timeout_sec": health_data.get("timeout_sec"),
+        "cameras": cameras,
+    }
 
 
 @app.get("/api/reports/export")

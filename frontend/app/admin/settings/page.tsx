@@ -1,5 +1,6 @@
 // صفحة الإعدادات — server component يجلب القيم ثم يمررها لنموذج العميل
 import FormSettings from "@/components/form-settings";
+import SettingsHeading from "@/components/settings-heading";
 import { serverFetch } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -10,19 +11,15 @@ export default async function AdminSettingsPage() {
     ? ((await res.json()) as Record<string, unknown>)
     : {};
 
-  // توكن بوت التلغرام يصل مقنّعاً من الباكند — لا نمرر قيمته للنموذج
+  // توكن بوت التلغرام وكلمة مرور SMTP يصلان مقنّعين من الباكند — لا نمرر قيمتهما للنموذج
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-2">⚙️ إعدادات النظام</h1>
-      <p className="text-sm text-gray-400 mb-6">
-        التعديلات تُحفظ في <code className="text-gray-300">config.json</code>{" "}
-        ويطبّقها الوكيل فوراً (Hot Reload) دون إعادة تشغيل.
-      </p>
+      <SettingsHeading />
 
       <div className="rounded-xl border border-gray-800 bg-gray-800/60 p-6 shadow-xl">
         <FormSettings
           initial={{
-            // قائمة الكاميرات الحقيقية — أوى توافق خلفي صف واحد من CAMERA_URL القديم
+            // قائمة الكاميرات الحقيقية — أو توافق خلفي صف واحد من CAMERA_URL القديم
             cameras: Array.isArray(settings["CAMERAS"])
               ? ((settings["CAMERAS"] as Record<string, unknown>[])
                   .map((camera, index) => ({
@@ -48,6 +45,10 @@ export default async function AdminSettingsPage() {
               typeof settings["ZONE_DWELL_TIME"] === "number"
                 ? settings["ZONE_DWELL_TIME"]
                 : 2,
+            cameraTimeoutSec:
+              typeof settings["CAMERA_TIMEOUT_SEC"] === "number"
+                ? settings["CAMERA_TIMEOUT_SEC"]
+                : 30,
             zone: {
               tlx: typeof settings["ZONE_TOP_LEFT_X"] === "number"
                 ? settings["ZONE_TOP_LEFT_X"]
@@ -73,6 +74,23 @@ export default async function AdminSettingsPage() {
             modelSize: typeof settings["MODEL_SIZE"] === "string"
               ? settings["MODEL_SIZE"]
               : "n",
+            email: {
+              enabled: settings["ENABLE_EMAIL_ALERTS"] === true,
+              host: typeof settings["SMTP_HOST"] === "string"
+                ? settings["SMTP_HOST"]
+                : "",
+              port: typeof settings["SMTP_PORT"] === "number"
+                ? settings["SMTP_PORT"]
+                : 587,
+              user: typeof settings["SMTP_USER"] === "string"
+                ? settings["SMTP_USER"]
+                : "",
+              passwordSet: typeof settings["SMTP_PASSWORD"] === "string" &&
+                settings["SMTP_PASSWORD"].length > 0,
+              emailTo: typeof settings["ALERT_EMAIL_TO"] === "string"
+                ? settings["ALERT_EMAIL_TO"]
+                : "",
+            },
           }}
         />
       </div>

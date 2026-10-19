@@ -133,10 +133,10 @@ def alert_node(state: SurveillanceState) -> SurveillanceState:
         alert = Alert()
         if alert.is_cooldown_over():
             camera_label = str(state.get("camera_name") or f"كاميرا {state.get('camera_id') or 1}")
-            alert.send_telegram(
-                state["image_path"],
-                f"🚨 تسلل محتمل في: {camera_label} الساعة {state['timestamp']}"
-            )
+            alert_message = f"🚨 تسلل محتمل في: {camera_label} الساعة {state['timestamp']}"
+            alert.send_telegram(state["image_path"], alert_message)
+            # التنبيه البريدي اختياري — يفعّل من ENABLE_EMAIL_ALERTS في config.json/.env
+            alert.send_email_alert(state["image_path"], alert_message)
             logger_obj = EventLogger()
             logger_obj.log_event(
                 "intrusion",

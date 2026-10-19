@@ -5,10 +5,12 @@ import { useActionState } from "react";
 import Link from "next/link";
 
 import { loginAction, type AuthActionState } from "@/actions/auth";
+import { useLanguage } from "@/components/language-context";
 
 const initialState: AuthActionState = {};
 
 export default function FormLogin() {
+  const { t } = useLanguage();
   // useActionState (React 19): يعاد التوجيه من داخل الـ action عند النجاح
   const [state, formAction, isPending] = useActionState(
     loginAction,
@@ -22,7 +24,7 @@ export default function FormLogin() {
           htmlFor="username"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          البريد الإلكتروني
+          {t("emailLabel")}
         </label>
         <input
           id="username"
@@ -41,7 +43,7 @@ export default function FormLogin() {
           htmlFor="password"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          كلمة المرور
+          {t("passwordLabel")}
         </label>
         <input
           id="password"
@@ -67,16 +69,16 @@ export default function FormLogin() {
         disabled={isPending}
         className="w-full h-11 rounded-md bg-teal-600 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
       >
-        {isPending ? "جارٍ تسجيل الدخول..." : "دخول"}
+        {isPending ? t("loggingIn") : t("loginButton")}
       </button>
 
       <p className="text-sm text-gray-400 text-center">
-        ليس لديك حساب؟{" "}
+        {t("noAccount")}{" "}
         <Link
           href="/signup"
           className="text-teal-400 hover:text-teal-300 hover:underline"
         >
-          سجّل الآن
+          {t("signupLink")}
         </Link>
       </p>
     </form>

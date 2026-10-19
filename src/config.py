@@ -62,6 +62,14 @@ def _parse_hour(value: Any) -> int:
     return hour
 
 
+def _parse_port(value: Any) -> int:
+    """منفذ SMTP ضمن 1-65535"""
+    port = int(value)
+    if not 1 <= port <= 65535:
+        raise ValueError("منفذ SMTP يجب أن يكون ضمن 1-65535")
+    return port
+
+
 # تعريف الإعدادات الديناميكية القابلة للتعديل عبر config.json أو الـ API
 # الصيغة: الاسم داخل Config -> (اسم متغير البيئة في .env، دالة التحويل، القيمة الافتراضية)
 _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
@@ -79,6 +87,19 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     "FIGHT_SPEED_THRESHOLD": ("FIGHT_SPEED_THRESHOLD", int, 100),
     "FIGHT_DISTANCE_THRESHOLD": ("FIGHT_DISTANCE_THRESHOLD", int, 50),
     "ZONE_DWELL_TIME": ("ZONE_DWELL_TIME", float, 2.0),
+    # مراقبة الصحة: مهلة انقطاع الكاميرا بالثواني قبل اعتبارها غير متصلة
+    "CAMERA_TIMEOUT_SEC": ("CAMERA_TIMEOUT_SEC", float, 30),
+    # البريد الإلكتروني (تنبيهات SMTP — اختيارية عبر ENABLE_EMAIL_ALERTS)
+    "SMTP_HOST": ("SMTP_HOST", str, ""),
+    "SMTP_PORT": ("SMTP_PORT", _parse_port, 587),
+    "SMTP_USER": ("SMTP_USER", str, ""),
+    "SMTP_PASSWORD": ("SMTP_PASSWORD", str, ""),
+    "ALERT_EMAIL_TO": ("ALERT_EMAIL_TO", str, ""),
+    "ENABLE_EMAIL_ALERTS": (
+        "ENABLE_EMAIL_ALERTS",
+        lambda v: str(v).strip().lower() in ("1", "true", "yes", "on"),
+        False,
+    ),
     # المنطقة الحساسة
     "ZONE_TOP_LEFT_X": ("ZONE_TOP_LEFT_X", int, 100),
     "ZONE_TOP_LEFT_Y": ("ZONE_TOP_LEFT_Y", int, 100),

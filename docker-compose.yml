@@ -44,6 +44,7 @@ services:
     volumes:
       - ./alerts:/app/alerts
       - ./models:/app/models
+      - ./logs:/app/logs
       - ./config.json:/app/config.json
       - ./.env:/app/.env
     depends_on:

@@ -5,10 +5,12 @@ import { useActionState } from "react";
 import Link from "next/link";
 
 import { registerAction, type AuthActionState } from "@/actions/auth";
+import { useLanguage } from "@/components/language-context";
 
 const initialState: AuthActionState = {};
 
 export default function FormRegister() {
+  const { t } = useLanguage();
   const [state, formAction, isPending] = useActionState(
     registerAction,
     initialState
@@ -21,7 +23,7 @@ export default function FormRegister() {
           htmlFor="email"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          البريد الإلكتروني
+          {t("emailLabel")}
         </label>
         <input
           id="email"
@@ -40,7 +42,7 @@ export default function FormRegister() {
           htmlFor="password"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          كلمة المرور (6 أحرف على الأقل)
+          {t("passwordHint")}
         </label>
         <input
           id="password"
@@ -60,7 +62,7 @@ export default function FormRegister() {
           htmlFor="password_confirm"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          تأكيد كلمة المرور
+          {t("confirmPasswordLabel")}
         </label>
         <input
           id="password_confirm"
@@ -77,12 +79,12 @@ export default function FormRegister() {
 
       {state.ok && (
         <p className="rounded-md border border-green-800 bg-green-900/40 px-3 py-2 text-sm text-green-300">
-          ✓ تم التسجيل بنجاح —{" "}
+          {t("registerSuccess")}{" "}
           <Link
             href="/login"
             className="font-medium text-green-200 hover:underline"
           >
-            سجّل دخولك الآن
+            {t("registerSuccessLink")}
           </Link>
         </p>
       )}
@@ -98,16 +100,16 @@ export default function FormRegister() {
         disabled={isPending}
         className="w-full h-11 rounded-md bg-teal-600 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
       >
-        {isPending ? "جارٍ إنشاء الحساب..." : "إنشاء الحساب"}
+        {isPending ? t("signingUp") : t("signupButton")}
       </button>
 
       <p className="text-sm text-gray-400 text-center">
-        لديك حساب بالفعل؟{" "}
+        {t("haveAccount")}{" "}
         <Link
           href="/login"
           className="text-teal-400 hover:text-teal-300 hover:underline"
         >
-          دخول
+          {t("loginLink")}
         </Link>
       </p>
     </form>

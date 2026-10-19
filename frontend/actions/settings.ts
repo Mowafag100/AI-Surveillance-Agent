@@ -55,6 +55,39 @@ export async function saveSettingsAction(
     payload[fieldKey] = parsedValue;
   }
 
+  // ==== المهلة/CAMERA_TIMEOUT_SEC (ثواني — مهلة انقطاع الكاميرا) ====
+  const cameraTimeoutRaw = String(formData.get("CAMERA_TIMEOUT_SEC") ?? "").trim();
+  if (cameraTimeoutRaw !== "") {
+    const cameraTimeout = Number(cameraTimeoutRaw);
+    if (!Number.isFinite(cameraTimeout) || cameraTimeout < 5) {
+      return { error: "CAMERA_TIMEOUT_SEC يجب أن يكون رقماً (5 ثوانٍ على الأقل)" };
+    }
+    payload.CAMERA_TIMEOUT_SEC = cameraTimeout;
+  }
+
+  // ==== تنبيهات البريد الإلكتروني ====
+  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false)
+  payload.ENABLE_EMAIL_ALERTS = formData.get("ENABLE_EMAIL_ALERTS") === "on";
+
+  const smtpPortRaw = String(formData.get("SMTP_PORT") ?? "").trim();
+  if (smtpPortRaw !== "") {
+    const smtpPort = Number(smtpPortRaw);
+    if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+      return { error: "SMTP_PORT يجب أن يكون رقماً صحيحاً ضمن 1-65535" };
+    }
+    payload.SMTP_PORT = smtpPort;
+  }
+  const smtpHost = String(formData.get("SMTP_HOST") ?? "").trim();
+  const smtpUser = String(formData.get("SMTP_USER") ?? "").trim();
+  const alertEmailTo = String(formData.get("ALERT_EMAIL_TO") ?? "").trim();
+  // الحقول النصية غير السرية تُرسل دائماً (مسح الفراغ يفرّغها في config.json)
+  payload.SMTP_HOST = smtpHost;
+  payload.SMTP_USER = smtpUser;
+  payload.ALERT_EMAIL_TO = alertEmailTo;
+  // كلمة مرور SMTP تُعرض مقنّعة — تُرسل فقط عند كتابة قيمة جديدة
+  const smtpPassword = String(formData.get("SMTP_PASSWORD") ?? "").trim();
+  if (smtpPassword) payload.SMTP_PASSWORD = smtpPassword;
+
   // ==== حجم النموذج ====
   const modelSize = String(formData.get("MODEL_SIZE") ?? "").trim();
   if (["n", "s", "m"].includes(modelSize)) {

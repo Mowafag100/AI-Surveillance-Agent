@@ -2,6 +2,8 @@
 import { redirect } from "next/navigation";
 
 import FormRegister from "@/components/form-register";
+import LanguageToggle from "@/components/language-toggle";
+import SessionHeading from "@/components/session-heading";
 import { AUTH_COOKIE, serverFetch } from "@/lib/api";
 
 import { cookies } from "next/headers";
@@ -20,17 +22,12 @@ export default async function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-gray-900 px-4">
       <div className="w-full max-w-md space-y-8 rounded-xl border border-gray-800 bg-gray-800/60 p-8 shadow-xl">
-        <div className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-2xl">
-            📷
-          </div>
-          <h1 className="text-2xl font-bold text-white">إنشاء حساب (Signup)</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            أول حساب يُنشأ في النظام يحصل على صلاحيات المشرف تلقائياً
-          </p>
+        <div className="absolute top-4 ltr:right-4 rtl:left-4">
+          <LanguageToggle />
         </div>
+        <SessionHeading titleKey="signupTitle" subtitleKey="signupSubtitle" />
         <FormRegister />
       </div>
     </div>
