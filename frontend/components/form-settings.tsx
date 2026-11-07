@@ -4,6 +4,18 @@
 // + حقول: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, ZONE_DWELL_TIME
 // + مهلة انقطاع الكاميرا (CAMERA_TIMEOUT_SEC) + قسم البريد الإلكتروني SMTP
 import { useActionState, useState } from "react";
+import {
+  AlarmClock,
+  BrainCircuit,
+  Cctv,
+  LocateFixed,
+  Mail,
+  Plus,
+  Save,
+  Send,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
 import { saveSettingsAction, type SettingsActionState } from "@/actions/settings";
 import { useLanguage } from "@/components/language-context";
@@ -16,6 +28,9 @@ interface CameraRow {
   url: string;
 }
 
+const INPUT_CLASS =
+  "w-full rounded-md border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400/40 disabled:opacity-50";
+
 /** حقل رقمي موحّد (إحداثيات المنطقة/التوقيت/زمن البقاء/المهلة) */
 function ZoneField({
   fieldKey,
@@ -24,7 +39,6 @@ function ZoneField({
   step,
   min,
   max,
-  wide,
 }: {
   fieldKey: string;
   label: string;
@@ -32,13 +46,12 @@ function ZoneField({
   step?: string;
   min?: number;
   max?: number;
-  wide?: boolean;
 }) {
   return (
-    <div className={wide ? "col-span-2" : undefined}>
+    <div>
       <label
         htmlFor={fieldKey}
-        className="block text-xs font-medium text-gray-300 mb-1"
+        className="mb-1.5 block text-xs font-medium text-slate-300"
       >
         {label}
       </label>
@@ -52,10 +65,47 @@ function ZoneField({
         autoComplete="off"
         defaultValue={defaultValue}
         dir="ltr"
-        className={`rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-teal-500 focus:outline-none ${
-          wide ? "w-full" : "w-full"
-        }`}
+        className={INPUT_CLASS}
       />
+    </div>
+  );
+}
+
+/** قسم إعدادات موحّد — رأس بأيقونة ابشر + جسم شبكة عمودين */
+function SettingsSection({
+  titleKey,
+  icon: Icon,
+  hintKey,
+  children,
+  cols = 2,
+}: {
+  titleKey: string;
+  icon: LucideIcon;
+  hintKey?: string;
+  children: React.ReactNode;
+  cols?: 1 | 2;
+}) {
+  const { t } = useLanguage();
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 shadow-lg shadow-black/20">
+      <h3 className="mb-4 flex items-center gap-2.5 text-sm font-semibold text-slate-200">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-400">
+          <Icon className="h-4 w-4" />
+        </span>
+        {t(titleKey)}
+      </h3>
+      {hintKey && (
+        <p className="mb-4 text-xs leading-relaxed text-slate-500">
+          {t(hintKey)}
+        </p>
+      )}
+      <div
+        className={
+          cols === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2" : "space-y-4"
+        }
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -67,6 +117,7 @@ interface FormSettingsProps {
     telegramChatId: string;
     zoneDwellTime: number;
     cameraTimeoutSec: number;
+    trackCooldownSec: number;
     zone: { tlx: number; tly: number; brx: number; bry: number };
     alerts: { startHour: number; endHour: number };
     modelSize: string;
@@ -116,187 +167,190 @@ export default function FormSettings({ initial }: FormSettingsProps) {
     // ناتجاً من تخمين Chrome لنموذج الدخول (بوجود type=password)+ بيانات مصادفة
     <form action={formAction} autoComplete="off" className="space-y-5">
       {/* ===== الكاميرات ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("camerasSection")}</h3>
+      <SettingsSection titleKey="camerasSection" icon={Cctv}>
         {/* عدّاد الصفوف يحمل عدد الكاميرات النهائي عند الحفظ (بعد الحذف/الإضافة) */}
         <input type="hidden" name="CAMERAS_COUNT" value={cameras.length} />
-
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <span className="block text-sm font-medium text-gray-300">
-            {t("camerasLabel")}
-          </span>
-          <button
-            type="button"
-            onClick={addRow}
-            disabled={isPending}
-            className="h-8 rounded-md bg-gray-700 px-3 text-xs text-white hover:bg-gray-600 disabled:opacity-50"
-          >
-            {t("addCamera")}
-          </button>
-        </div>
-
-        <div className="rounded-lg border border-gray-700 overflow-hidden">
-          {/* رأس الجدول */}
-          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-3 bg-gray-900/80 px-4 py-2 text-xs text-gray-400">
-            <span>{t("cameraNameColumn")}</span>
-            <span>{t("cameraUrlColumn")}</span>
-            <span className="text-right">{t("deleteColumn")}</span>
+        <div className="md:col-span-2">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="block text-sm font-medium text-slate-300">
+              {t("camerasLabel")}
+            </span>
+            <button
+              type="button"
+              onClick={addRow}
+              disabled={isPending}
+              className="inline-flex h-8 items-center gap-1 rounded-md bg-slate-800 px-3 text-xs text-slate-200 ring-1 ring-inset ring-slate-700 transition-colors hover:bg-slate-700 disabled:opacity-50"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("addCamera")}
+            </button>
           </div>
 
-          {/* شرائط الكاميرات */}
-          {cameras.length === 0 ? (
-            <p className="px-4 py-4 text-xs text-gray-500">
-              {t("noCamerasHint")}
-            </p>
-          ) : (
-            <div className="divide-y divide-gray-700/60">
-              {cameras.map((camera, index) => (
-                <div
-                  key={camera.id}
-                  className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-3 px-4 py-3 items-center"
-                  dir="ltr"
-                >
-                  <input
-                    name={`CAMERAS_${index}_NAME`}
-                    type="text"
-                    defaultValue={camera.name}
-                    onChange={(event) =>
-                      updateRow(camera.id, { name: event.target.value })
-                    }
-                    disabled={isPending}
-                    autoComplete="off"
-                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white text-right focus:border-teal-500 focus:outline-none"
-                  />
-                  <input
-                    name={`CAMERAS_${index}_URL`}
-                    type="text"
-                    defaultValue={camera.url}
-                    onChange={(event) =>
-                      updateRow(camera.id, { url: event.target.value })
-                    }
-                    disabled={isPending}
-                    autoComplete="off"
-                    placeholder="http://CAMERA_IP:PORT/video"
-                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeRow(camera.id)}
-                    disabled={isPending}
-                    aria-label={`${t("deleteCameraAria")} ${camera.name || t("cameraUnknownName")}`}
-                    className="h-9 rounded-md bg-red-900/50 px-3 text-sm text-red-300 hover:bg-red-900/80 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    ✕ {t("deleteCamera")}
-                  </button>
-                </div>
-              ))}
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            {/* رأس الجدول */}
+            <div className="grid grid-cols-1 gap-3 bg-slate-950/80 px-4 py-2.5 text-xs text-slate-500 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]">
+              <span>{t("cameraNameColumn")}</span>
+              <span>{t("cameraUrlColumn")}</span>
+              <span className="text-end">{t("deleteColumn")}</span>
             </div>
-          )}
-        </div>
-        <p className="mt-1 text-xs text-gray-500">
-          {t("emptyRowsHint")}
-        </p>
-      </div>
 
-        <ZoneField
-          fieldKey="CAMERA_TIMEOUT_SEC"
-          label={t("cameraTimeoutLabel")}
-          defaultValue={initial.cameraTimeoutSec}
-          step="1"
-          min={5}
-          wide
-        />
-      </div>
+            {/* شرائط الكاميرات */}
+            {cameras.length === 0 ? (
+              <p className="px-4 py-4 text-xs text-slate-500">
+                {t("noCamerasHint")}
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-800/60">
+                {cameras.map((camera, index) => (
+                  <div
+                    key={camera.id}
+                    className="grid grid-cols-1 items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-800/50 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto]"
+                    dir="ltr"
+                  >
+                    <input
+                      name={`CAMERAS_${index}_NAME`}
+                      type="text"
+                      defaultValue={camera.name}
+                      onChange={(event) =>
+                        updateRow(camera.id, { name: event.target.value })
+                      }
+                      disabled={isPending}
+                      autoComplete="off"
+                      className={INPUT_CLASS}
+                    />
+                    <input
+                      name={`CAMERAS_${index}_URL`}
+                      type="text"
+                      defaultValue={camera.url}
+                      onChange={(event) =>
+                        updateRow(camera.id, { url: event.target.value })
+                      }
+                      disabled={isPending}
+                      autoComplete="off"
+                      placeholder="http://CAMERA_IP:PORT/video"
+                      className={INPUT_CLASS}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeRow(camera.id)}
+                      disabled={isPending}
+                      aria-label={`${t("deleteCameraAria")} ${camera.name || t("cameraUnknownName")}`}
+                      className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-md bg-red-500/10 px-3 text-sm text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {t("deleteCamera")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500">{t("emptyRowsHint")}</p>
+          <div className="mt-3">
+            <ZoneField
+              fieldKey="CAMERA_TIMEOUT_SEC"
+              label={t("cameraTimeoutLabel")}
+              defaultValue={initial.cameraTimeoutSec}
+              step="1"
+              min={5}
+            />
+          </div>
+        </div>
+      </SettingsSection>
 
       {/* ===== المنطقة الحساسة ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("zoneSection")}</h3>
-        <p className="text-xs text-gray-500">
-          {t("zoneHint")}
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <ZoneField fieldKey="ZONE_TOP_LEFT_X" label={t("zoneTopLeftX")} defaultValue={initial.zone.tlx} />
-          <ZoneField fieldKey="ZONE_TOP_LEFT_Y" label={t("zoneTopLeftY")} defaultValue={initial.zone.tly} />
-          <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_X" label={t("zoneBottomRightX")} defaultValue={initial.zone.brx} />
-          <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_Y" label={t("zoneBottomRightY")} defaultValue={initial.zone.bry} />
+      <SettingsSection titleKey="zoneSection" icon={LocateFixed} hintKey="zoneHint">
+        <ZoneField fieldKey="ZONE_TOP_LEFT_X" label={t("zoneTopLeftX")} defaultValue={initial.zone.tlx} />
+        <ZoneField fieldKey="ZONE_TOP_LEFT_Y" label={t("zoneTopLeftY")} defaultValue={initial.zone.tly} />
+        <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_X" label={t("zoneBottomRightX")} defaultValue={initial.zone.brx} />
+        <ZoneField fieldKey="ZONE_BOTTOM_RIGHT_Y" label={t("zoneBottomRightY")} defaultValue={initial.zone.bry} />
+        <div className="md:col-span-2">
+          <ZoneField
+            fieldKey="ZONE_DWELL_TIME"
+            label={t("zoneDwellLabel")}
+            defaultValue={initial.zoneDwellTime}
+            step="0.5"
+          />
         </div>
-        <ZoneField
-          fieldKey="ZONE_DWELL_TIME"
-          label={t("zoneDwellLabel")}
-          defaultValue={initial.zoneDwellTime}
-          step="0.5"
-          wide
-        />
-      </div>
+      </SettingsSection>
 
       {/* ===== أوقات التنبيه ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("scheduleSection")}</h3>
-        <p className="text-xs text-gray-500">
-          {t("scheduleHint")}
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <ZoneField
-            fieldKey="ALERT_START_HOUR"
-            label={t("startHourLabel")}
-            defaultValue={initial.alerts.startHour}
-            min={0}
-            max={23}
-          />
-          <ZoneField
-            fieldKey="ALERT_END_HOUR"
-            label={t("endHourLabel")}
-            defaultValue={initial.alerts.endHour}
-            min={0}
-            max={23}
-          />
-        </div>
-      </div>
+      <SettingsSection
+        titleKey="scheduleSection"
+        icon={AlarmClock}
+        hintKey="scheduleHint"
+      >
+        <ZoneField
+          fieldKey="ALERT_START_HOUR"
+          label={t("startHourLabel")}
+          defaultValue={initial.alerts.startHour}
+          min={0}
+          max={23}
+        />
+        <ZoneField
+          fieldKey="ALERT_END_HOUR"
+          label={t("endHourLabel")}
+          defaultValue={initial.alerts.endHour}
+          min={0}
+          max={23}
+        />
+      </SettingsSection>
 
       {/* ===== الذكاء الاصطناعي ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("aiSection")}</h3>
-        <label
-          htmlFor="MODEL_SIZE"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          {t("modelSizeLabel")}
-        </label>
-        <select
-          id="MODEL_SIZE"
-          name="MODEL_SIZE"
-          defaultValue={initial.modelSize}
-          disabled={isPending}
-          className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white focus:border-teal-500 focus:outline-none"
-        >
-          <option value="n">{t("modelN")}</option>
-          <option value="s">{t("modelS")}</option>
-          <option value="m">{t("modelM")}</option>
-        </select>
-        <p className="mt-1 text-xs text-gray-500">
-          {t("modelHint")}
-        </p>
+      <SettingsSection titleKey="aiSection" icon={BrainCircuit} cols={1}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="MODEL_SIZE"
+              className="mb-1.5 block text-xs font-medium text-slate-300"
+            >
+              {t("modelSizeLabel")}
+            </label>
+            <select
+              id="MODEL_SIZE"
+              name="MODEL_SIZE"
+              defaultValue={initial.modelSize}
+              disabled={isPending}
+              className={INPUT_CLASS}
+            >
+              <option value="n">{t("modelN")}</option>
+              <option value="s">{t("modelS")}</option>
+              <option value="m">{t("modelM")}</option>
+            </select>
+            <p className="mt-1.5 text-xs text-slate-500">{t("modelHint")}</p>
+          </div>
+          <div>
+            <ZoneField
+              fieldKey="MIN_CONFIDENCE"
+              label={t("minConfidenceLabel")}
+              defaultValue={initial.minConfidence}
+              step="0.05"
+              min={0.1}
+              max={0.9}
+            />
+            <p className="mt-1.5 text-xs text-slate-500">
+              {t("minConfidenceHint")}
+            </p>
+          </div>
+        </div>
         <ZoneField
-          fieldKey="MIN_CONFIDENCE"
-          label={t("minConfidenceLabel")}
-          defaultValue={initial.minConfidence}
-          step="0.05"
-          min={0.1}
-          max={0.9}
+          fieldKey="TRACK_COOLDOWN_SEC"
+          label={t("trackCooldownLabel")}
+          defaultValue={initial.trackCooldownSec}
+          step="1"
+          min={1}
         />
-        <p className="mt-1 text-xs text-gray-500">
-          {t("minConfidenceHint")}
+        <p className="-mt-2.5 text-xs text-slate-500">
+          {t("trackCooldownHint")}
         </p>
-      </div>
+      </SettingsSection>
 
       {/* ===== التلغرام ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("telegramSection")}</h3>
+      <SettingsSection titleKey="telegramSection" icon={Send}>
         <div>
           <label
             htmlFor="TELEGRAM_BOT_TOKEN"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("botTokenLabel")}
           </label>
@@ -309,13 +363,13 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             autoComplete="new-password"
             placeholder={t("keepCurrentPlaceholder")}
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
         <div>
           <label
             htmlFor="TELEGRAM_CHAT_ID"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("chatIdLabel")}
           </label>
@@ -328,26 +382,25 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             defaultValue={initial.telegramChatId}
             placeholder={initial.telegramChatId ? "" : t("keepCurrentPlaceholder")}
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
-      </div>
+      </SettingsSection>
 
       {/* ===== البريد الإلكتروني ===== */}
-      <div className="rounded-lg border border-gray-700 bg-gray-900/40 p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-teal-300">{t("emailSection")}</h3>
-        <label className="flex items-center gap-3 text-sm font-medium text-gray-300 cursor-pointer select-none">
+      <SettingsSection titleKey="emailSection" icon={Mail}>
+        <label className="flex cursor-pointer select-none items-center gap-3 text-sm font-medium text-slate-300 md:col-span-2">
           <input
             type="checkbox"
             name="ENABLE_EMAIL_ALERTS"
             checked={emailEnabled}
             onChange={(event) => setEmailEnabled(event.target.checked)}
             disabled={isPending}
-            className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-teal-500"
+            className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-teal-500"
           />
           {t("enableEmailAlerts")}
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div>
           <ZoneField
             fieldKey="SMTP_PORT"
             label={t("smtpPortLabel")}
@@ -360,7 +413,7 @@ export default function FormSettings({ initial }: FormSettingsProps) {
         <div>
           <label
             htmlFor="SMTP_HOST"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("smtpHostLabel")}
           </label>
@@ -373,13 +426,13 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             placeholder="smtp.gmail.com"
             dir="ltr"
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
         <div>
           <label
             htmlFor="SMTP_USER"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("smtpUserLabel")}
           </label>
@@ -392,13 +445,13 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             placeholder="alerts@example.com"
             dir="ltr"
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
         <div>
           <label
             htmlFor="SMTP_PASSWORD"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("smtpPasswordLabel")}
           </label>
@@ -409,18 +462,16 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             autoComplete="new-password"
             // القيمة الحقيقية مقنّعة من الباكند — رسلها فقط عند كتابة قيمة جديدة
             placeholder={
-              initial.email.passwordSet
-                ? t("keepCurrentPlaceholder")
-                : ""
+              initial.email.passwordSet ? t("keepCurrentPlaceholder") : ""
             }
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
         <div>
           <label
             htmlFor="ALERT_EMAIL_TO"
-            className="block text-sm font-medium text-gray-300 mb-1"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
           >
             {t("alertEmailToLabel")}
           </label>
@@ -433,31 +484,31 @@ export default function FormSettings({ initial }: FormSettingsProps) {
             placeholder="security@example.com"
             dir="ltr"
             disabled={isPending}
-            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-white placeholder:text-gray-500 focus:border-teal-500 focus:outline-none"
+            className={INPUT_CLASS}
           />
         </div>
-        <p className="mt-1 text-xs text-gray-500">
-          {t("smtpHint")}
-        </p>
-      </div>
+        <p className="text-xs text-slate-500 md:col-span-2">{t("smtpHint")}</p>
+      </SettingsSection>
 
       {state.ok && (
-        <p className="rounded-md border border-green-800 bg-green-900/40 px-3 py-2 text-sm text-green-300">
+        <p className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
           {t("saveSuccess")}
         </p>
       )}
 
       {state.error && (
-        <p className="rounded-md border border-red-800 bg-red-900/40 px-3 py-2 text-sm text-red-300">
+        <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {state.error}
         </p>
       )}
 
+      {/* زر الحفظ الأساسي — Teal-600 بارز مع أيقونة */}
       <button
         type="submit"
         disabled={isPending}
-        className="h-11 rounded-md bg-teal-600 px-6 font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+        className="inline-flex h-11 items-center gap-2 rounded-lg bg-teal-600 px-8 font-semibold text-white shadow-lg shadow-teal-950/40 transition-colors hover:bg-teal-500 disabled:opacity-50"
       >
+        <Save className="h-4 w-4" />
         {isPending ? t("saving") : t("save")}
       </button>
     </form>

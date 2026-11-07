@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7))
 ALGORITHM = "HS256"
+
+# جعل كل مستخدم جديد مشرفاً عند التسجيل (REGISTER_AS_ADMIN=true/false — الافتراضي true)
+REGISTER_AS_ADMIN = os.getenv("REGISTER_AS_ADMIN", "true").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 DEFAULT_SECRET = ("", "change_me", "change_me_jwt_secret")
 
 if not JWT_SECRET_KEY or JWT_SECRET_KEY in DEFAULT_SECRET:
@@ -227,18 +232,17 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", status_code=201, response_model=UserPublic)
 async def register(user_in: UserRegister, db: DbDep) -> User:
-    """تسجيل مستخدم جديد — أول مستخدم في النظام يصبح admin تلقائياً (bootstrap)"""
+    """تسجيل مستخدم جديد — كل مستخدم جديد يصبح admin عندما REGISTER_AS_ADMIN=true (الافتراضي)"""
     await init_auth_db()
     if await get_user_by_email(db, user_in.email):
         raise HTTPException(
             status_code=400, detail="يوجد مستخدم بهذا البريد الإلكتروني"
         )
-    is_first_user = await get_user_count(db) == 0
     user = User(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
         full_name=user_in.full_name,
-        is_superuser=is_first_user,
+        is_superuser=REGISTER_AS_ADMIN,
     )
     db.add(user)
     await db.commit()

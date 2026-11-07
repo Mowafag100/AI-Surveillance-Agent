@@ -47,12 +47,26 @@ class Detector:
             return []
         # YOLO ليس آمناً موثقاً للتنفيذ المتوازي من نفس الكائن — التسلسل هنا
         with _inference_lock:
-            results = self.model(frame, verbose=False)
+            # track() = predict + تتبّع (ByteTrack): persist=True يُبقي track_id
+            # بين الإطارات لسلسلة نفس الشخص. المُتتبِّع مشترك بين الكاميرات
+            # (حلقة الاستنتاج متسلسلة بالقفل أصلاً) وتُفصل المعرّفات لكل كاميرا
+            # لحفظ المؤقتات. تحديد bytetrack.yaml صريحاً لأن الافتراضي في
+            # ultralytics 8.4 (TRACKTRACK) عادت نتائجه بلا معرّفات هنا.
+            results = self.model.track(
+                frame,
+                persist=True,
+                conf=Config.MIN_CONFIDENCE,
+                tracker="bytetrack.yaml",
+                verbose=False,
+            )
         persons = []
         for box in results[0].boxes:
             if box.cls == self.person_class_id and box.conf >= Config.MIN_CONFIDENCE:
+                # box.id يبقى None حتى يثبّت المتتبع معرّفاً (أول إطار / كشف مفقود)
+                track_id = int(box.id.item()) if box.id is not None else None
                 persons.append({
                     "bbox": box.xyxy[0].tolist(),
-                    "confidence": float(box.conf)
+                    "confidence": float(box.conf),
+                    "track_id": track_id,
                 })
         return persons

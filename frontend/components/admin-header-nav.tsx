@@ -32,6 +32,12 @@ export default function AdminHeaderNav({
         >
           {t("settingsLink")}
         </a>
+        <a
+          href="/admin/employees"
+          className="text-sm text-teal-400 hover:text-teal-300 transition"
+        >
+          {t("employeesLink")}
+        </a>
       </div>
       <div className="flex items-center gap-3 flex-wrap">
         <LanguageToggle />

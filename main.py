@@ -27,6 +27,7 @@ from src.camera import Camera
 from src.agent import build_agent
 from src.alert import Alert
 from src.config import Config, get_config_mtime
+from src.anomaly import prune_camera_alarms
 
 # تقليل عدد خيوط المعالجة لتخفيف الضغط
 torch.set_num_threads(1)
@@ -101,6 +102,10 @@ class _CameraWorker(threading.Thread):
                 "timestamp": "",
                 "camera_id": self.camera_id,
                 "camera_name": self.camera_name,
+                "track_id": None,       # من نتائج التتبع (YOLO track)
+                "event_type": "",       # intrusion / employee_entry
+                "employee_name": "",    # الاسم من التعرف على الوجوه
+                "employee_role": "",
             }
             try:
                 result = self.agent.invoke(state)
@@ -189,6 +194,9 @@ def main():
                 continue
             logger.info(f"🆕 فتح الكاميرا [{spec.get('name')}] ({spec.get('url')})")
             start_worker(spec)
+
+        # 4) تنظيف حالة كشف الشذوذ للكاميرات المحذوفة حيّاً (منع نمو الذاكرة)
+        prune_camera_alarms({int(spec.get("id", 1)) for spec in specs})
 
     # فتح الكاميرات الابتدائية ثم مراقبة config.json كل 5 ثوانٍ
     reconcile_cameras()

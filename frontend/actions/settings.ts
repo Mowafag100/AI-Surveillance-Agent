@@ -110,6 +110,20 @@ export async function saveSettingsAction(
     payload.MIN_CONFIDENCE = minConf;
   }
 
+  // ==== مهلة منع التكرار لكل شخص (TRACK_COOLDOWN_SEC — ثواني، 1 على الأقل) ====
+  const trackCooldownRaw = String(formData.get("TRACK_COOLDOWN_SEC") ?? "").trim();
+  if (trackCooldownRaw !== "") {
+    const trackCooldown = Number(trackCooldownRaw);
+    if (
+      !Number.isFinite(trackCooldown) ||
+      !Number.isInteger(trackCooldown) ||
+      trackCooldown < 1
+    ) {
+      return { error: "TRACK_COOLDOWN_SEC يجب أن يكون رقماً صحيحاً (ثانية واحدة على الأقل)" };
+    }
+    payload.TRACK_COOLDOWN_SEC = trackCooldown;
+  }
+
   // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير
   const camerasCount = Number(formData.get("CAMERAS_COUNT") ?? "0");
   const cameras: { id: number; name: string; url: string }[] = [];

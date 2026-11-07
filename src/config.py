@@ -81,12 +81,33 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     "TELEGRAM_CHAT_ID": ("TELEGRAM_CHAT_ID", str, ""),
     # الكشف والتنبيه
     "ALERT_COOLDOWN": ("ALERT_COOLDOWN", int, 30),
+    # مهلة منع التكرار لكل شخص متتبَّع (track_id) بالثواني — تمنع التنبيهات
+    # المتكررة لنفس الشخص؛ شخص جديد (track_id آخر) يطلق تنبيهاً فوراً
+    "TRACK_COOLDOWN_SEC": ("TRACK_COOLDOWN_SEC", int, 60),
     "MIN_CONFIDENCE": ("MIN_CONFIDENCE", float, 0.3),
     "MODEL_SIZE": ("MODEL_SIZE", _parse_model_size, "n"),
     "FALL_ASPECT_RATIO_THRESHOLD": ("FALL_ASPECT_RATIO_THRESHOLD", float, 1.2),
     "FIGHT_SPEED_THRESHOLD": ("FIGHT_SPEED_THRESHOLD", int, 100),
     "FIGHT_DISTANCE_THRESHOLD": ("FIGHT_DISTANCE_THRESHOLD", int, 50),
     "ZONE_DWELL_TIME": ("ZONE_DWELL_TIME", float, 2.0),
+    # التعرف على الوجوه: تشابه كوسين الأدنى لمطابقة موظف — معايرة على لقطات
+    # المراقبة الحقيقية: تكرارات الجلسة نفسها 0.82-0.96 والوجوه المختلفة ≤0.79
+    "FACE_MATCH_THRESHOLD": ("FACE_MATCH_THRESHOLD", float, 0.85),
+    # كشف السلوك الشاذ (src/anomaly.py): مضاد إجمالي + عتبات الكواشف الثلاثة.
+    # FALL_ASPECT_RATIO_THRESHOLD أعلاه يُعاد استخدامه لكشف السقوط
+    "ENABLE_ANOMALY_DETECTION": (
+        "ENABLE_ANOMALY_DETECTION",
+        lambda v: str(v).strip().lower() in ("1", "true", "yes", "on"),
+        True,
+    ),
+    # سرعة الجري على إطار المعالجة 640×480 — المشي ~20-60 px/s (تحويل حيّ)
+    "RUN_SPEED_THRESHOLD_PX": ("RUN_SPEED_THRESHOLD_PX", float, 150.0),
+    # مدة الثبات في مساحة صغيرة قرب المنطقة الحساسة قبل حدث loitering
+    "LOITERING_SEC": ("LOITERING_SEC", float, 60.0),
+    # نصف قطر «المساحة الصغيرة» حول لوح الشخص (بكسل) — تجاوزها ينهي الجلسة
+    "LOITERING_RADIUS_PX": ("LOITERING_RADIUS_PX", float, 40.0),
+    # مهلة منع تكرار حدث شاذ لكل (كاميرا، شخص، نوع) — يمنع الغمل كل إطار
+    "ANOMALY_EVENT_COOLDOWN": ("ANOMALY_EVENT_COOLDOWN", float, 20.0),
     # مراقبة الصحة: مهلة انقطاع الكاميرا بالثواني قبل اعتبارها غير متصلة
     "CAMERA_TIMEOUT_SEC": ("CAMERA_TIMEOUT_SEC", float, 30),
     # البريد الإلكتروني (تنبيهات SMTP — اختيارية عبر ENABLE_EMAIL_ALERTS)

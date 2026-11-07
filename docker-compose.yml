@@ -33,6 +33,15 @@ services:
       - surveillance_net
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: surveillance-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - surveillance_net
+    restart: unless-stopped
+
   agent:
     build:
       context: .
@@ -71,6 +80,10 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change_me_jwt_secret_key}
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-surveillance_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-surveillance_db}
       - REDIS_URL=redis://redis:6379
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=qwen2.5:1.5b
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "18090:8090"
     volumes:
@@ -83,6 +96,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ollama:
+        condition: service_started
     networks:
       - surveillance_net
     restart: unless-stopped
@@ -99,3 +114,4 @@ networks:
 
 volumes:
   postgres_data:
+  ollama_data:

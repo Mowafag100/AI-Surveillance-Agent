@@ -9,3 +9,21 @@ sqlalchemy[asyncio]>=2.0.0
 asyncpg>=0.29.0
 # مطلوب من FastAPI لقراءة OAuth2PasswordRequestForm (نموذج الدخول)
 python-multipart>=0.0.9
+# استخراج بصمة الوجه عند رفع صور الموظفين (POST /api/employees) — src/face_recognizer.py
+# <5.0.0: cv2 5.x أزال CascadeClassifier المستخدم في كشف الوجوه
+opencv-contrib-python>=4.9.0,<5.0.0
+# تقارير PDF (GET /api/reports/pdf) — الترميز + تصحيح عرض العربي
+# (ربط الحروف عبر arabic-reshaper + اتجاه RTL عبر python-bidi)
+reportlab>=4.2.0
+arabic-reshaper>=3.0.0
+python-bidi>=0.4.2
+# reportlab يُفسّر صور JPEG داخل drawImage عبر Pillow حصراً
+Pillow>=10.0.0
+# ================= الميزة: المساعد الذكي للمحادثة (Post /api/chat — src/chat.py) =================
+# langchain الأساس + langchain-community كما طلبت المهمة
+langchain>=0.2.0
+langchain-community>=0.2.0
+# مزودا المصدر (اختياريان عملياً — استيراد متأخر ينجو من غيابهما):
+# يُستخدم OpenAI عند OPENAI_API_KEY، وOllama عند OLLAMA_BASE_URL
+langchain-openai>=0.1.0
+langchain-ollama>=0.2.0

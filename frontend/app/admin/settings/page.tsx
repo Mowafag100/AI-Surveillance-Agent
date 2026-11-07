@@ -49,6 +49,10 @@ export default async function AdminSettingsPage() {
               typeof settings["CAMERA_TIMEOUT_SEC"] === "number"
                 ? settings["CAMERA_TIMEOUT_SEC"]
                 : 30,
+            trackCooldownSec:
+              typeof settings["TRACK_COOLDOWN_SEC"] === "number"
+                ? settings["TRACK_COOLDOWN_SEC"]
+                : 60,
             zone: {
               tlx: typeof settings["ZONE_TOP_LEFT_X"] === "number"
                 ? settings["ZONE_TOP_LEFT_X"]

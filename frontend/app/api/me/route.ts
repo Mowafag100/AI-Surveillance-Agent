@@ -3,15 +3,12 @@
 // (يستخدمه زر "تأكيد المراجعة" في لوحة التحكم لمعرفة إن كان المشرف مسجلاً)
 import { cookies } from "next/headers";
 
+import { resolveApiBaseUrl } from "@/lib/api";
+
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
-  const apiBase =
-    process.env.API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:8090";
-
-  const res = await fetch(`${apiBase}/api/me`, {
+  const res = await fetch(`${resolveApiBaseUrl()}/api/me`, {
     headers: { Cookie: (await cookies()).toString() },
     cache: "no-store",
   });

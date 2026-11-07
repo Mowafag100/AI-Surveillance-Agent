@@ -33,4 +33,27 @@ engine = create_async_engine(DATABASE_URL, echo=False)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
-# ... (نفس تعريفات الجداول السابقة)
+
+class Employee(Base):
+    """موظف سُجّلت بصمة وجهه — التعرف عليه يمنع تنبيه تسلل كاذب لفريق العمل"""
+
+    __tablename__ = "employees"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    role = Column(String(255), nullable=True)
+    # بصمة الوجه: قائمة floats مرمّزة JSON (لا تُخزَّن الصورة نفسها في القاعدة)
+    face_encoding = Column(Text, nullable=False)
+
+
+_employees_schema_ready = False
+
+
+async def init_employees() -> None:
+    """إنشاء جدول employees مرة واحدة لكل عملية (idempotent) — نفس نمط init_auth_db"""
+    global _employees_schema_ready
+    if _employees_schema_ready:
+        return
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    _employees_schema_ready = True

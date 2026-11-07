@@ -2,13 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# تثبيت التبعيات النظامية (معدل)
+# تثبيت التبعيات النظامية (معدل) — libxcb1 مطلوب لـ cv2 نفس السبب في Dockerfile.api
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender1 \
+    libxcb1 \
     libgomp1 \
     wget \
     && rm -rf /var/lib/apt/lists/*

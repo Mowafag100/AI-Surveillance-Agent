@@ -1,5 +1,10 @@
-opencv-python>=4.9.0
+# opencv-contrib أصل جامع للنواة (core) — لا تثبيت opencv-python معه
+# (حزمتان تزوّدان نفس الوحدة cv2 ويتصادمان عند الاستيراد)
+# <5.0.0: cv2 5.x أزال CascadeClassifier المستخدم في كشف الوجوه
+opencv-contrib-python>=4.9.0,<5.0.0
 ultralytics>=8.0.0
+# مُتتبِّع ByteTrack يحتاج lap (الأولوية تثبته حياً — مثبّته هنا بانتظام)
+lap>=0.5.12
 python-dotenv>=1.0.0
 requests>=2.31.0
 langgraph>=0.0.20

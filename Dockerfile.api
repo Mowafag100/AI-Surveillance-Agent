@@ -2,6 +2,21 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# حزم النظام: مكتبات runtime لـ opencv (import cv2 ينهار في slim بلا libgl/libxcb
+# وغيرها: "libxcb.so.1 not found") + خط DejaVu العربي لتقارير PDF
+# (reportlab لا يشكّل العربي — راجع src/api.py)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        fonts-dejavu-core \
+        libgl1 \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        libxcb1 \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # حزم الواجهة الخلفية فقط (requirements.txt يحوي تبعيات ثقيلة لا نريدها في صورة API)
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" pydantic
 # تبعيات المصادقة (User model + JWT + bcrypt)

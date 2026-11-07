@@ -33,6 +33,8 @@ build/
 models/*.pt
 models/*.pth
 models/*.onnx
+# استثناء: نموذج YuNet الصغير للأوجه الذي يعمل بتنسيق vendor في src/assets
+!src/assets/*.onnx
 
 # ----- Data & Logs -----
 alerts/
