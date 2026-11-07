@@ -17,11 +17,15 @@ Unlike basic motion detectors, this system uses **YOLOv8** and **ByteTrack** to 
 ---
 
 ## ✨ Key Features
-
 ### 🧠 Advanced AI & Computer Vision
 *   **Face Recognition:** Differentiates between authorized employees and unknown intruders. Employee entries are logged without triggering false alarms.
 *   **Multi-Camera Tracking (ByteTrack):** Tracks individuals across frames to prevent duplicate alerts for the same person.
 *   **Virtual Zones:** Draw custom restricted zones; alerts trigger only if a person enters and dwells in the zone for a specific time.
+*   **🚨 Behavioral Anomaly Detection (NEW):** Real-time detection of critical incidents:
+    *   **Running:** Detects suspicious fast movement.
+    *   **Fall:** Detects sudden falls based on bounding box geometry.
+    *   **Loitering:** Detects unauthorized personnel standing in restricted areas for too long.
+*   **💬 AI Security Assistant (NEW):** Integrated LLM (Ollama/LangChain) that allows operators to chat with the system in natural language (e.g., "How many intrusions happened yesterday in Camera 1?").
 
 ### 🖥️ Professional Dashboard
 *   **Bilingual UI:** Full support for Arabic (RTL) and English (LTR).
