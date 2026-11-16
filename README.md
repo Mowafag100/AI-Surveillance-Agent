@@ -29,7 +29,7 @@ Mowafag100 is not a passive CCTV system. It is an **autonomous security agent** 
 - **Multi-Camera Coordination**: ByteTrack prevents duplicate alerts for the same individual across feeds.
 - **Behavioral Anomaly Detection**: Running, fall, and loitering are detected and classified by severity.
 - **Hot-Reload Configuration**: Agent continues running while settings change—no restart required.
-
+- **Decision Audit Trail**: Every autonomous decision (alert sent, alert suppressed, anomaly escalated, camera offline) is logged with reasoning and confidence, and is viewable in the admin dashboard.
 ## Demo Video ( English subtitles)
 
 [Watch the demo](https://drive.google.com/file/d/1g4_K1axUY-4Fe7161MvQG1nlDzRFJq6h/view?usp=sharing)
