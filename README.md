@@ -1,101 +1,73 @@
-# 🎯 AI Surveillance Agent
-**Enterprise-Grade, AI-Powered Threat Detection & Surveillance Platform**
+# Mowafag100 — Autonomous Security Surveillance Agent
+
+**An AI agent that watches, decides, and acts on its own.**
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED.svg)](https://www.docker.com/)
 [![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-yellow.svg)](https://ultralytics.com/)
 
 ![Dashboard Preview](docs/screenshots/dashboard.png)
 
-## 📖 Overview
-**AI Surveillance Agent** is a production-ready, full-stack surveillance system designed for security firms and facility management. It bridges the gap between traditional CCTV cameras and modern AI by eliminating false alarms, recognizing employees, and providing immediate, actionable intelligence to control rooms.
+## What This Agent Does
 
-Unlike basic motion detectors, this system uses **YOLOv8** and **ByteTrack** to understand *who* is in the frame and *where* they are, sending instant Telegram/Email alerts with images only when unauthorized personnel enter restricted zones.
+Mowafag100 is not a passive CCTV system. It is an **autonomous security agent** that continuously monitors multiple camera feeds, makes decisions about what constitutes a threat, and executes responses—all without waiting for human instruction.
 
----
+## The Agentic Loop
 
-## ✨ Key Features
-### 🧠 Advanced AI & Computer Vision
-*   **Face Recognition:** Differentiates between authorized employees and unknown intruders. Employee entries are logged without triggering false alarms.
-*   **Multi-Camera Tracking (ByteTrack):** Tracks individuals across frames to prevent duplicate alerts for the same person.
-*   **Virtual Zones:** Draw custom restricted zones; alerts trigger only if a person enters and dwells in the zone for a specific time.
-*   **🚨 Behavioral Anomaly Detection (NEW):** Real-time detection of critical incidents:
-    *   **Running:** Detects suspicious fast movement.
-    *   **Fall:** Detects sudden falls based on bounding box geometry.
-    *   **Loitering:** Detects unauthorized personnel standing in restricted areas for too long.
-*   **💬 AI Security Assistant (NEW):** Integrated LLM (Ollama/LangChain) that allows operators to chat with the system in natural language (e.g., "How many intrusions happened yesterday in Camera 1?").
+| Phase | Autonomous Action |
+|-------|-------------------|
+| **Perceive** | Ingests RTSP streams, runs YOLOv8 detection + ByteTrack tracking across cameras |
+| **Decide** | Checks face recognition against authorized employees; evaluates zone intrusion and behavioral anomalies (running/fall/loitering); determines if escalation is warranted |
+| **Act** | Sends Telegram alerts with snapshots; logs decisions with full audit trail; **self-reports camera disconnection without being prompted** |
+| **Respond** | LLM assistant answers operator queries in natural language about historical events |
 
-### 🖥️ Professional Dashboard
-*   **Bilingual UI:** Full support for Arabic (RTL) and English (LTR).
-*   **Live View:** Secure MJPEG streaming directly from the dashboard.
-*   **Audit Trail:** Acknowledge alerts to log exactly which supervisor reviewed the incident.
-*   **PDF & CSV Reporting:** Export professional bilingual PDF reports for legal or client documentation.
+## Key Agentic Capabilities
 
-### ⚙️ Dynamic & Secure Architecture
-*   **Hot-Reload Settings:** Change camera URLs, AI model sizes (n/s/m), or zones from the UI without restarting the system.
-*   **JWT Authentication:** Secure, cookie-based authentication for the admin dashboard.
-*   **Dockerized:** Complete deployment with `docker-compose` (API, Agent, PostgreSQL, Redis).
+- **Self-Monitoring & Fault Reporting**: The agent detects when a camera feed drops and autonomously alerts the operator via Telegram. No human trigger required.
+- **Context-Aware Escalation**: Employee entry is logged silently. Unknown intrusion triggers immediate alert. The agent decides the difference.
+- **Multi-Camera Coordination**: ByteTrack prevents duplicate alerts for the same individual across feeds.
+- **Behavioral Anomaly Detection**: Running, fall, and loitering are detected and classified by severity.
+- **Hot-Reload Configuration**: Agent continues running while settings change—no restart required.
 
----
+## Demo Video ( English subtitles)
 
-## 📸 Platform Screenshots
+[Watch the demo](https://drive.google.com/file/d/1g4_K1axUY-4Fe7161MvQG1nlDzRFJq6h/view?usp=sharing)
 
-| Event Management & Audit Trail | Professional PDF Reports |
-| :---: | :---: |
-| ![Events](docs/screenshots/events.png) | ![PDF Report](docs/screenshots/pdf-report.png) |
+The video demonstrates: intrusion detection → Telegram alert received → **agent autonomously reports camera disconnection**.
 
-| Dynamic System Settings | Employee Face Management |
-| :---: | :---: |
-| ![Settings](docs/screenshots/settings.png) | ![Employees](docs/screenshots/employees.png) |
+## Target Category (Dubai Create AI Agents Championship)
 
----
+**Best Business AI Agent** — enabling security firms to reduce false alarms, cut response time, and maintain continuous surveillance without constant human monitoring. Designed to reduce false-alarm review time and eliminate the need for continuous human monitoring of camera feeds.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
-| :--- | :--- |
-| **Frontend** | Next.js 16 (React), Tailwind CSS, Lucide Icons |
-| **Backend API** | FastAPI, Python-JOSE (JWT), SQLAlchemy |
-| **AI / CV** | YOLOv8 (Ultralytics), OpenCV, ByteTrack |
-| **Database** | PostgreSQL 15 |
-| **Cache / Broker**| Redis |
-| **Reporting** | ReportLab (Arabic/English PDF generation) |
-| **Deployment** | Docker, Docker Compose |
+|-------|------------|
+| Frontend | Next.js 16, Tailwind CSS |
+| Backend API | FastAPI, JWT, SQLAlchemy |
+| AI / CV | YOLOv8, OpenCV, ByteTrack |
+| Database | PostgreSQL 15 |
+| Cache | Redis |
+| Reporting | ReportLab (Arabic/English PDF) |
+| Deployment | Docker Compose |
 
----
+## Quick Start
 
-## 🚀 Quick Start (Docker)
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Mowafag100/AI-Surveillance-Agent.git
-   cd AI-Surveillance-Agent
-Setup Environment Variables:
-
-bash
+```bash
+git clone https://github.com/Mowafag100/AI-Surveillance-Agent.git
+cd AI-Surveillance-Agent
 cp .env.example .env
-# Edit .env and add your TELEGRAM_BOT_TOKEN, CHAT_ID, and DB passwords.
-Launch the stack:
-
-bash
+# Add TELEGRAM_BOT_TOKEN, CHAT_ID, DB passwords
 docker compose up -d --build
-Access the Dashboard:
+Access at http://localhost:3001. First registered user becomes Superuser.
 
-Navigate to http://localhost:3001
+Security
+100% on-premise processing—no video leaves the local network
 
-Register the first user (automatically becomes Superuser).
+bcrypt password hashing, JWT-protected API
 
-Go to /admin/settings to add your IP Camera URL.
-
-Go to /admin/employees to register authorized faces.
-
-🔒 Security & Privacy
-100% On-Premise: No video data is sent to external clouds. All AI processing happens locally via the Agent.
-
-Secure by Design: Passwords are hashed using bcrypt, and API access is protected by JWT.
-
-Data Sanitization: Employee face encodings are stored securely, and reports are generated on-the-fly.
-
+Employee face encodings are stored server-side only; all report downloads are logged with user ID and timestamp
+```
 Developed by Mowafag Fawzy
+
