@@ -38,7 +38,7 @@ The video demonstrates: intrusion detection → Telegram alert received → **ag
 
 ## Target Category (Dubai Create AI Agents Championship)
 
-**Best Business AI Agent** — enabling security firms to reduce false alarms, cut response time, and maintain continuous surveillance without constant human monitoring. Designed to reduce false-alarm review time and eliminate the need for continuous human monitoring of camera feeds.
+**Best Business AI Agent** — enabling security firms to reduce false alarms, cut response time, and maintain continuous surveillance without constant human monitoring.Designed to reduce false-alarm review time by automatically suppressing employee-entry alerts and escalating only confirmed anomalies — delivering measurable operational value for security teams.
 
 ## Tech Stack
 
