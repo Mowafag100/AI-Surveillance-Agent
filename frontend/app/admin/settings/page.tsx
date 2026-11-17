@@ -26,6 +26,11 @@ export default async function AdminSettingsPage() {
                     id: Number(camera.id) || index + 1,
                     name: typeof camera.name === "string" ? camera.name : "",
                     url: typeof camera.url === "string" ? camera.url : "",
+                    // الإعدادات المنفردة للكاميرا (Per-Camera Settings) — إن وُجدت
+                    settings:
+                      camera.settings && typeof camera.settings === "object"
+                        ? (camera.settings as Record<string, unknown>)
+                        : undefined,
                   }))
                   .filter((camera) => camera.url || camera.name))
               : typeof settings["CAMERA_URL"] === "string" &&

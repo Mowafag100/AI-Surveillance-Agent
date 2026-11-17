@@ -89,6 +89,15 @@ const ar = {
   cameraTimeoutLabel: "مهلة الانقطاع بالثواني (CAMERA_TIMEOUT_SEC)",
   deleteCamera: "حذف",
   deleteCameraAria: "حذف الكاميرا",
+  applyToSection: "نطاق تطبيق الإعدادات",
+  applyToLabel: "تطبيق الإعدادات على",
+  applyToAllCameras: "جميع الكاميرات (عام)",
+  applyToCameraPrefix: "الكاميرا:",
+  applyToHint:
+    "اختر كاميرا لتخصيص «المنطقة الحساسة، أوقات التنبيه، المشاجرات، اللون الممنوع» لها وحدها — ما لم تخصصه يتراجع تلقائياً للقيم العامة. بقية الأقسام (الكاميرات/الذكاء الاصطناعي/التلغرام/البريد) عامة دائماً.",
+  applyToTargetAll: "جميع الكاميرات",
+  perCameraScopeNote:
+    "القيم التالية تُطبَّق على: {target} فقط — يُسجل في إعدادات هذه الكاميرا داخل config.json.",
   zoneSection: "المنطقة الحساسة",
   zoneHint: "إحداثيات المستطيل على إطار بمقاس 640×480 (تُصغَّر كل الاتصالات تلقائياً) — التسلُّل يُحتسب حين يدخل مركز الشخص هذا المستطيل.",
   zoneTopLeftX: "أعلى-يسار X",
@@ -298,6 +307,15 @@ const en: typeof ar = {
   cameraTimeoutLabel: "Offline timeout in seconds (CAMERA_TIMEOUT_SEC)",
   deleteCamera: "Delete",
   deleteCameraAria: "Delete camera",
+  applyToSection: "Settings Scope",
+  applyToLabel: "Apply settings to",
+  applyToAllCameras: "All cameras (global)",
+  applyToCameraPrefix: "Camera:",
+  applyToHint:
+    "Pick a camera to customize the sensitive zone, alert schedule, fight and forbidden-color settings for that camera only — anything not customized falls back to the global values. Other sections (cameras/AI/Telegram/email) are always global.",
+  applyToTargetAll: "All cameras",
+  perCameraScopeNote:
+    "The following values apply to: {target} only — saved in this camera's settings inside config.json.",
   zoneSection: "Sensitive Zone",
   zoneHint: "Rectangle coordinates on a 640×480 frame (all streams are resized automatically) — intrusion counts when the person's center enters this rectangle.",
   zoneTopLeftX: "Top-left X",

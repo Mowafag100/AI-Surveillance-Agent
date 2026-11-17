@@ -43,7 +43,13 @@ from reportlab.platypus import (
 from sqlalchemy import select
 
 from src.auth import CurrentUser, DbDep, SuperUser, alias_router, router as auth_router
-from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
+from src.config import (
+    CAMERA_OVERRIDABLE_SETTINGS,
+    CONFIG_JSON_PATH,
+    Config,
+    _SETTINGS,
+    load_json_config,
+)
 from src.database import (
     AgentDecision,
     Employee,
@@ -241,8 +247,64 @@ async def update_settings(payload: dict[str, Any], admin_user: SuperUser) -> dic
                 status_code=400, detail=f"قيمة غير صالحة لـ {key}: {value!r}"
             ) from exc
 
+    # الحفظ المنفرد لكل كاميرا: CAMERAS[i].settings — قائمة بيضاء + قيم صالحة
+    # (كل مفتاح من Camera-Settings المسموحة يمر عبر مضبّط الإعداد العام نفسه)
+    cameras_payload = payload.get("CAMERAS")
+    if isinstance(cameras_payload, list):
+        for index, camera in enumerate(cameras_payload, start=1):
+            if not isinstance(camera, dict) or camera.get("settings") is None:
+                continue
+            camera_label = camera.get("name") or f"رقم {index}"
+            per_camera = camera["settings"]
+            if not isinstance(per_camera, dict):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"settings الكاميرا «{camera_label}» يجب أن تكون كائناً",
+                )
+            for key, value in per_camera.items():
+                if key not in CAMERA_OVERRIDABLE_SETTINGS:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"الكاميرا «{camera_label}»: الإعداد {key} لا يقبل "
+                            "التخصيص لكل كاميرا"
+                        ),
+                    )
+                try:
+                    _SETTINGS[key][1](value)
+                except (ValueError, TypeError) as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"الكاميرا «{camera_label}»: قيمة غير صالحة لـ {key}: {value!r}"
+                        ),
+                    ) from exc
+
     # دمج التعديلات فوق الإعدادات الموجودة (الحفاظ على المفاتيح الأخرى)
     current = load_json_config()
+    # الحفظ المنفرد: كاميرا تُرسل بلا settings → تُحفظ الإعدادات المنفردة
+    # الموجودة لها في config.json (حفظ عام لا يمحو تخصيصات الكاميرات؛
+    # الإرسال الصريح بـ settings: {} يمحوها)
+    current_cameras = current.get("CAMERAS")
+    if isinstance(cameras_payload, list) and isinstance(current_cameras, list):
+        existing_by_id: dict[int, dict[str, Any]] = {}
+        for camera in current_cameras:
+            if not isinstance(camera, dict) or not isinstance(camera.get("settings"), dict):
+                continue
+            try:
+                existing_by_id[int(camera.get("id", -1))] = camera["settings"]
+            except (TypeError, ValueError):
+                continue
+        for camera in cameras_payload:
+            if not isinstance(camera, dict) or "settings" in camera:
+                continue
+            try:
+                existing = existing_by_id.get(int(camera.get("id", -1)))
+            except (TypeError, ValueError):
+                continue
+            if existing:
+                camera["settings"] = dict(existing)
+
     current.update(payload)
 
     try:

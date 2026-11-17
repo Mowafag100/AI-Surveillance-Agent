@@ -27,7 +27,7 @@ from collections import deque
 from datetime import datetime
 from typing import Any
 
-from src.config import Config
+from src.config import get_camera_setting
 
 # سجل مواقع كل شخص (كاميرا، track_id) — ~2 ثانية كافية لقياس السرعة/التقارب
 _PERSON_HISTORY_MAXLEN = 16
@@ -106,10 +106,12 @@ def _speed_px_s(history: deque) -> float:
 
 
 def _cooldown_ok(
-    key: tuple[int, ...], last_map: dict[tuple, float], ts: float
+    key: tuple[int, ...], last_map: dict[tuple, float], ts: float, camera_id: int
 ) -> bool:
-    """مهلة الحدث الواحد (ANOMALY_EVENT_COOLDOWN) لكل مفتاح — تمنع التكرار"""
-    if ts - last_map.get(key, -1.0e18) < float(Config.ANOMALY_EVENT_COOLDOWN):
+    """مهلة الحدث الواحد (ANOMALY_EVENT_COOLDOWN لهذه الكاميرا) لكل مفتاح —
+    تمنع التكرار. الإعداد منفرد لكل كاميرا مع الرجوع للعام (Fallback)."""
+    cooldown = float(get_camera_setting(camera_id, "ANOMALY_EVENT_COOLDOWN"))
+    if ts - last_map.get(key, -1.0e18) < cooldown:
         return False
     last_map[key] = ts
     return True
@@ -134,10 +136,11 @@ def _check_fights(
     persons: list[dict],
     ts: float,
 ) -> list[dict[str, Any]]:
-    """أزواج التلاحم: IoU مستمر + سرعة عالية → حدث fight لكل زوج مؤهل"""
-    threshold = float(Config.FIGHT_IOU_THRESHOLD)
-    min_frames = max(1, int(Config.FIGHT_MIN_FRAMES))
-    motion = float(Config.FIGHT_MOTION_THRESHOLD)
+    """أزواج التلاحم: IoU مستمر + سرعة عالية → حدث fight لكل زوج مؤهل
+    (عتبات إعدادات منفردة لهذه الكاميرا مع الرجوع للعام)"""
+    threshold = float(get_camera_setting(camera_id, "FIGHT_IOU_THRESHOLD"))
+    min_frames = max(1, int(get_camera_setting(camera_id, "FIGHT_MIN_FRAMES")))
+    motion = float(get_camera_setting(camera_id, "FIGHT_MOTION_THRESHOLD"))
     label = _camera_label(camera_id, camera_name)
 
     # تحديث عدّادات الأزواج الموجودة هذا الإطار (وعلامة الحضور)
@@ -176,7 +179,7 @@ def _check_fights(
             if (
                 state["frames"] > min_frames
                 and state["max_speed"] >= motion
-                and _cooldown_ok((camera_id, min(a, b), max(a, b), "fight"), _last_fight, ts)
+                and _cooldown_ok((camera_id, min(a, b), max(a, b), "fight"), _last_fight, ts, camera_id)
             ):
                 events.append({
                     "event_type": "fight",
@@ -212,16 +215,13 @@ def _check_crowd_surge(
     ts: float,
 ) -> list[dict[str, Any]]:
     """تقارب المسافات: عنقود ≥ CROWD_MIN_PERSONS أشخاص ينكمشون نحو نقطة واحدة
-
-    زوج "متقارب" = المسافة بين مركزيه تنكمش بسرعة > CROWD_CONVERGENCE_THRESHOLD
-    والمسافة الحالية < CROWD_CONVERGENCE_RADIUS_PX. شخص له (الحد الأدنى - 1)
-    جارٍ متقارب على الأقل = عنقود نجمي حوله ← تجمهر مفاجئ."""
-    if len(persons) < max(2, int(Config.CROWD_MIN_PERSONS)):
+    (عتبات إعدادات منفردة لهذه الكاميرا مع الرجوع للعام)"""
+    if len(persons) < max(2, int(get_camera_setting(camera_id, "CROWD_MIN_PERSONS"))):
         return []
 
     label = _camera_label(camera_id, camera_name)
-    speed_threshold = float(Config.CROWD_CONVERGENCE_THRESHOLD)
-    radius = float(Config.CROWD_CONVERGENCE_RADIUS_PX)
+    speed_threshold = float(get_camera_setting(camera_id, "CROWD_CONVERGENCE_THRESHOLD"))
+    radius = float(get_camera_setting(camera_id, "CROWD_CONVERGENCE_RADIUS_PX"))
 
     # مركز كل شخص هذا الإطار + المواقع السابقة (العيّنة قبل الحالية —
     # evaluate_frame يضيف موضع الإطار الحالي إلى السجل قبل التقييم)
@@ -275,7 +275,7 @@ def _check_crowd_surge(
     if not pair_min_distance:
         return events
 
-    min_persons = max(3, int(Config.CROWD_MIN_PERSONS))
+    min_persons = max(3, int(get_camera_setting(camera_id, "CROWD_MIN_PERSONS")))
     cluster: set[int] = set()
     best_speed = 0.0
     for person_id, neighbours in adjacency.items():
@@ -317,8 +317,9 @@ def evaluate_frame(
     """تحدّث حالة المشاجرات/التجمهر لهذا الإطار وتعيد الأحداث المُطلَقة.
 
     كل عنصر جاهز للـ EventLogger بنسق أحداث anomaly نفسه — بلا I/O هنا.
+    مفتاح التفعيل/العتبات من إعدادات هذه الكاميرا (منفردة أو العام).
     """
-    if not bool(Config.ENABLE_FIGHT_DETECTION):
+    if not bool(get_camera_setting(camera_id, "ENABLE_FIGHT_DETECTION")):
         return []
 
     ts = time.time()
@@ -348,7 +349,7 @@ def evaluate_frame(
 
     # --- التجمهر المفاجئ (تقارب المسافات) ---
     surge = _check_crowd_surge(camera_id, camera_name, persons, ts)
-    if surge and _cooldown_ok((camera_id, "crowd_surge"), _last_surge, ts):
+    if surge and _cooldown_ok((camera_id, "crowd_surge"), _last_surge, ts, camera_id):
         events.extend(surge)
 
     return events

@@ -1,6 +1,9 @@
 "use server";
 
 // Server Action لحفظ الإعدادات — يستدعي POST /api/settings محمياً بـ JWT
+// يدعم الحفظ المنفرد لكل كاميرا: أقسام (المنطقة/التوقيت/المشاجرات/اللون)
+// تُرسل داخل camera.settings عندما يختار المستخدم كاميرا من قائمة «تطبيق
+// الإعدادات على»، وتبقى عامة مع «جميع الكاميرات».
 import { revalidatePath } from "next/cache";
 
 import { serverFetch } from "@/lib/api";
@@ -10,10 +13,117 @@ export interface SettingsActionState {
   ok?: boolean;
 }
 
+/** المفاتيح المسموح تخصيصها لكل كاميرا — مرآة CAMERA_OVERRIDABLE_SETTINGS في src/config.py */
+const PER_CAMERA_KEYS = new Set([
+  "ALERT_START_HOUR",
+  "ALERT_END_HOUR",
+  "ZONE_TOP_LEFT_X",
+  "ZONE_TOP_LEFT_Y",
+  "ZONE_BOTTOM_RIGHT_X",
+  "ZONE_BOTTOM_RIGHT_Y",
+  "ZONE_DWELL_TIME",
+  "ALERT_COOLDOWN",
+  "TRACK_COOLDOWN_SEC",
+  "ANOMALY_EVENT_COOLDOWN",
+  "ENABLE_COLOR_DETECTION",
+  "FORBIDDEN_COLOR_HEX",
+  "COLOR_TOLERANCE",
+  "COLOR_MIN_PERCENTAGE",
+  "ENABLE_FIGHT_DETECTION",
+  "FIGHT_IOU_THRESHOLD",
+  "FIGHT_MOTION_THRESHOLD",
+  "FIGHT_MIN_FRAMES",
+  "CROWD_CONVERGENCE_THRESHOLD",
+  "CROWD_MIN_PERSONS",
+  "CROWD_CONVERGENCE_RADIUS_PX",
+]);
+
+/** حدود القيم الرقمية للإعدادات المنفردة (مطابقة قواعد الحقول العامة) */
+const PER_CAMERA_NUMBERS: Record<
+  string,
+  { min: number; max: number; integer?: boolean }
+> = {
+  ZONE_TOP_LEFT_X: { min: 0, max: 100000, integer: true },
+  ZONE_TOP_LEFT_Y: { min: 0, max: 100000, integer: true },
+  ZONE_BOTTOM_RIGHT_X: { min: 0, max: 100000, integer: true },
+  ZONE_BOTTOM_RIGHT_Y: { min: 0, max: 100000, integer: true },
+  ZONE_DWELL_TIME: { min: 0, max: 3600 },
+  ALERT_START_HOUR: { min: 0, max: 23, integer: true },
+  ALERT_END_HOUR: { min: 0, max: 23, integer: true },
+  ALERT_COOLDOWN: { min: 1, max: 86400, integer: true },
+  TRACK_COOLDOWN_SEC: { min: 1, max: 86400, integer: true },
+  ANOMALY_EVENT_COOLDOWN: { min: 0, max: 3600 },
+  COLOR_TOLERANCE: { min: 0, max: 255, integer: true },
+  COLOR_MIN_PERCENTAGE: { min: 0, max: 100 },
+  FIGHT_IOU_THRESHOLD: { min: 0.05, max: 0.9 },
+  FIGHT_MOTION_THRESHOLD: { min: 0, max: 10000 },
+  FIGHT_MIN_FRAMES: { min: 1, max: 1000, integer: true },
+  CROWD_CONVERGENCE_THRESHOLD: { min: 0, max: 10000 },
+  CROWD_MIN_PERSONS: { min: 2, max: 20, integer: true },
+  CROWD_CONVERGENCE_RADIUS_PX: { min: 20, max: 10000 },
+};
+
+/** ضبط كائن settings المنفردة لكاميرا — يعيد كائناً نظيفاً أو رسالة خطأ */
+function validatePerCameraSettings(
+  raw: Record<string, unknown>
+): Record<string, unknown> | string {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!PER_CAMERA_KEYS.has(key)) {
+      return `الإعداد ${key} لا يقبل التخصيص لكل كاميرا`;
+    }
+    // القيم الفارغة = تراجع للقيمة العامة (تُهمل)
+    if (typeof value === "string" && value.trim() === "") continue;
+
+    if (key === "FORBIDDEN_COLOR_HEX") {
+      if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value.trim())) {
+        return "FORBIDDEN_COLOR_HEX يجب أن يكون بصيغة #RRGGBB";
+      }
+      clean[key] = value.trim().toUpperCase();
+      continue;
+    }
+    if (key === "ENABLE_COLOR_DETECTION" || key === "ENABLE_FIGHT_DETECTION") {
+      if (typeof value !== "boolean") {
+        return `${key} يجب أن يكون مفعّلاً/معطّلاً`;
+      }
+      clean[key] = value;
+      continue;
+    }
+    const bounds = PER_CAMERA_NUMBERS[key];
+    const num = typeof value === "number" ? value : Number(String(value).trim());
+    if (!Number.isFinite(num)) {
+      return `${key} يجب أن يكون رقماً`;
+    }
+    if (num < bounds.min || num > bounds.max) {
+      return `${key} يجب أن يكون ضمن ${bounds.min}-${bounds.max}`;
+    }
+    clean[key] = bounds.integer ? Math.round(num) : num;
+  }
+  const tlx = clean.ZONE_TOP_LEFT_X;
+  const tly = clean.ZONE_TOP_LEFT_Y;
+  const brx = clean.ZONE_BOTTOM_RIGHT_X;
+  const bry = clean.ZONE_BOTTOM_RIGHT_Y;
+  if ([tlx, brx, tly, bry].every((v) => typeof v === "number")) {
+    if ((tlx as number) >= (brx as number)) {
+      return "أعلى-يسار X يجب أن يكون أصغر من أسفل-يمين X";
+    }
+    if ((tly as number) >= (bry as number)) {
+      return "أعلى-يسار Y يجب أن يكون أصغر من أسفل-يمين Y";
+    }
+  }
+  return clean;
+}
+
 export async function saveSettingsAction(
   _prevState: SettingsActionState,
   formData: FormData
 ): Promise<SettingsActionState> {
+  // نطاق التطبيق: "all" أو "cam:<id>" — يقرر أي أقسام تُحفظ عامة
+  const applyToRaw = String(formData.get("APPLY_TO") ?? "all").trim();
+  const camMatch = /^cam:(\d+)$/.exec(applyToRaw);
+  const targetCameraId = camMatch ? Number(camMatch[1]) : null;
+  const perCameraMode = targetCameraId !== null;
+
   const payload: Record<string, unknown> = {};
 
   const zoneDwell = Number(formData.get("ZONE_DWELL_TIME") ?? "");
@@ -125,8 +235,11 @@ export async function saveSettingsAction(
   }
 
   // ==== كشف المشاجرات (مفتاح التفعيل + عتبات الشجار والتجمهر) ====
-  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false)
-  payload.ENABLE_FIGHT_DETECTION = formData.get("ENABLE_FIGHT_DETECTION") === "on";
+  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false) —
+  // في وضع الكاميرا المنفردة الحقل اسمه CAM_<id>_… ويُحفظ داخل settings
+  if (!perCameraMode) {
+    payload.ENABLE_FIGHT_DETECTION = formData.get("ENABLE_FIGHT_DETECTION") === "on";
+  }
 
   // حقول عشرية/صحيحة مع حدودها — الفراغ يُبقي القيمة الحالية كما هي
   const fightNumericFields: {
@@ -158,8 +271,11 @@ export async function saveSettingsAction(
   }
 
   // ==== كشف الزي المدرسي/اللون الممنوع (مفتاح التفعيل + اللون والعتبات) ====
-  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false)
-  payload.ENABLE_COLOR_DETECTION = formData.get("ENABLE_COLOR_DETECTION") === "on";
+  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false) —
+  // في وضع الكاميرا المنفردة الحقل اسمه CAM_<id>_… ويُحفظ داخل settings
+  if (!perCameraMode) {
+    payload.ENABLE_COLOR_DETECTION = formData.get("ENABLE_COLOR_DETECTION") === "on";
+  }
 
   // اللون السداسي من <input type="color"> بصيغة #rrggbb دائماً — يتحقق من الصيغة
   const forbiddenColorRaw = String(formData.get("FORBIDDEN_COLOR_HEX") ?? "").trim();
@@ -195,9 +311,16 @@ export async function saveSettingsAction(
     payload.COLOR_MIN_PERCENTAGE = colorPercent;
   }
 
-  // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير
+  // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير،
+  // ومعها CAMERAS_i_ID (معرّف ثابت) وCAMERAS_i_SETTINGS (الإعدادات المنفردة
+  // لكل كاميرا — حفظ منفرد يبقى محفوظاً عبر أي عملية حفظ عامة)
   const camerasCount = Number(formData.get("CAMERAS_COUNT") ?? "0");
-  const cameras: { id: number; name: string; url: string }[] = [];
+  const cameras: {
+    id: number;
+    name: string;
+    url: string;
+    settings?: Record<string, unknown>;
+  }[] = [];
   for (let i = 0; i < camerasCount; i++) {
     const name = String(formData.get(`CAMERAS_${i}_NAME`) ?? "").trim();
     const url = String(formData.get(`CAMERAS_${i}_URL`) ?? "").trim();
@@ -206,7 +329,30 @@ export async function saveSettingsAction(
     if (!url) {
       return { error: `الكاميرا "${name || i + 1}" بلا رابط` };
     }
-    cameras.push({ id: cameras.length + 1, name, url });
+    const idRaw = Number(formData.get(`CAMERAS_${i}_ID`) ?? NaN);
+    const id =
+      Number.isInteger(idRaw) && idRaw > 0 ? idRaw : cameras.length + 1;
+    const camera: {
+      id: number;
+      name: string;
+      url: string;
+      settings?: Record<string, unknown>;
+    } = { id, name, url };
+    const settingsRaw = String(formData.get(`CAMERAS_${i}_SETTINGS`) ?? "").trim();
+    if (settingsRaw) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(settingsRaw);
+      } catch {
+        return { error: `إعدادات الكاميرا "${name || id}" تالفة` };
+      }
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const clean = validatePerCameraSettings(parsed as Record<string, unknown>);
+        if (typeof clean === "string") return { error: clean };
+        if (clean && Object.keys(clean).length > 0) camera.settings = clean;
+      }
+    }
+    cameras.push(camera);
   }
   payload.CAMERAS = cameras;
 

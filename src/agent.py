@@ -3,7 +3,7 @@ from typing import TypedDict, List
 import logging
 import time
 from datetime import datetime
-from src.config import Config
+from src.config import get_camera_setting
 from src.detector import Detector
 from src.alert import Alert
 from src.logger import EventLogger
@@ -138,6 +138,23 @@ def is_inside_zone(bbox, zone):
     cy = (y1 + y2) / 2
     return zx1 <= cx <= zx2 and zy1 <= cy <= zy2
 
+
+def _camera_alert_hours(camera_id: int) -> tuple[int, int]:
+    """نافذة التنبيه لهذه الكاميرا (من/إلى) — إعدادات منفردة أو العام (Fallback)"""
+    start = int(get_camera_setting(camera_id, "ALERT_START_HOUR"))
+    end = int(get_camera_setting(camera_id, "ALERT_END_HOUR"))
+    return start, end
+
+
+def _is_alert_hour_valid(camera_id: int, now_hour: int) -> bool:
+    """هل الساعة الحالية داخل نافذة التنبيه لهذه الكاميرا؟
+    (end < start = نافذة تعبر منتصف الليل)"""
+    start, end = _camera_alert_hours(camera_id)
+    if end < start:
+        return now_hour >= start or now_hour <= end
+    return start <= now_hour <= end
+
+
 def color_zone_node(state: SurveillanceState) -> SurveillanceState:
     """كشف اللون الممنوع داخل المنطقة الحساسة فقط (forbidden_color_intrusion) —
     الترتيب صريح: فحص اللون أولاً، ثم تحقق التعرف على الوجوه (نتيجة
@@ -146,25 +163,26 @@ def color_zone_node(state: SurveillanceState) -> SurveillanceState:
     مستقل عن باب التوقيت/المهلات في decision_node — الشرط الوحيد: داخل ZONE.
     """
     state["color_events"] = []
-    if not bool(Config.ENABLE_COLOR_DETECTION):
+    camera_key = int(state.get("camera_id") or 0)
+    if not bool(get_camera_setting(camera_key, "ENABLE_COLOR_DETECTION")):
         return state
     frame = state.get("frame")
     persons = state.get("persons") or []
     if frame is None or not persons:
         return state
 
-    camera_key = int(state.get("camera_id") or 0)
     camera_label = str(state.get("camera_name") or f"كاميرا {camera_key}")
     zone = (
-        Config.ZONE_TOP_LEFT_X,
-        Config.ZONE_TOP_LEFT_Y,
-        Config.ZONE_BOTTOM_RIGHT_X,
-        Config.ZONE_BOTTOM_RIGHT_Y,
+        int(get_camera_setting(camera_key, "ZONE_TOP_LEFT_X")),
+        int(get_camera_setting(camera_key, "ZONE_TOP_LEFT_Y")),
+        int(get_camera_setting(camera_key, "ZONE_BOTTOM_RIGHT_X")),
+        int(get_camera_setting(camera_key, "ZONE_BOTTOM_RIGHT_Y")),
     )
-    target_hex = str(Config.FORBIDDEN_COLOR_HEX)
-    tolerance = int(Config.COLOR_TOLERANCE)
-    min_percentage = float(Config.COLOR_MIN_PERCENTAGE)
-    cooldown = float(Config.ANOMALY_EVENT_COOLDOWN)
+    target_hex = str(get_camera_setting(camera_key, "FORBIDDEN_COLOR_HEX"))
+    tolerance = int(get_camera_setting(camera_key, "COLOR_TOLERANCE"))
+    min_percentage = float(get_camera_setting(camera_key, "COLOR_MIN_PERCENTAGE"))
+    cooldown = float(get_camera_setting(camera_key, "ANOMALY_EVENT_COOLDOWN"))
+    start_hour, end_hour = _camera_alert_hours(camera_key)
     now_ts = time.time()
 
     events: List[dict] = []
@@ -181,6 +199,24 @@ def color_zone_node(state: SurveillanceState) -> SurveillanceState:
         if now_ts - _last_color_decision.get(decision_key, -1.0e18) < cooldown:
             continue  # قرار هذا الشخص صدر قبل قليل — بلا غمل كل إطار
         _last_color_decision[decision_key] = now_ts
+
+        # نافذة التنبيه لهذه الكاميرا (إعدادات منفردة/عام) — خارجها: كبت مع تسجيل السبب
+        if not _is_alert_hour_valid(camera_key, datetime.now().hour):
+            logger.info(
+                f"⏰ لون ممنوع {target_hex} ({percentage:.0f}%) داخل المنطقة "
+                f"[{camera_label}] لكن الوقت خارج نافذة التنبيه "
+                f"({start_hour:02d}:00–{end_hour:02d}:00) — كبت"
+            )
+            _log_agent_decision(
+                camera_key,
+                "alert_suppressed",
+                f"Forbidden color {target_hex} matched ({percentage:.0f}% of torso) "
+                f"in restricted zone [{camera_label}]. Outside alert hours "
+                f"({start_hour:02d}:00\u2013{end_hour:02d}:00) for this camera. "
+                "Alert suppressed.",
+                None,
+            )
+            continue
 
         if person.get("employee_id") is not None:
             # موظف مصرح له (Face Recognition) — كبت التنبيه مع تسجيل السبب
@@ -236,15 +272,12 @@ def decision_node(state: SurveillanceState) -> SurveillanceState:
         _zone_entry_time.pop(camera_key, None)
         return state
 
-    # === 1. التحقق من التوقيت ===
+    # === 1. التحقق من التوقيت (نافذة هذه الكاميرا — إعدادات منفردة أو العام) ===
     now = datetime.now()
-    start_hour = Config.ALERT_START_HOUR
-    end_hour = Config.ALERT_END_HOUR
+    start_hour, end_hour = _camera_alert_hours(camera_key)
+    dwell_required = float(get_camera_setting(camera_key, "ZONE_DWELL_TIME"))
 
-    if end_hour < start_hour:
-        is_time_valid = (now.hour >= start_hour or now.hour <= end_hour)
-    else:
-        is_time_valid = (start_hour <= now.hour <= end_hour)
+    is_time_valid = _is_alert_hour_valid(camera_key, now.hour)
 
     logger.info(f"⏰ التوقيت: {now.hour}:{now.minute}, الفترة: {start_hour}-{end_hour}, صالح: {is_time_valid}")
 
@@ -252,12 +285,12 @@ def decision_node(state: SurveillanceState) -> SurveillanceState:
         _zone_entry_time.pop(camera_key, None)
         return state
 
-    # === 2. التحقق من المنطقة ===
+    # === 2. التحقق من المنطقة (إحداثيات هذه الكاميرا — إعدادات منفردة أو العام) ===
     zone = (
-        Config.ZONE_TOP_LEFT_X,
-        Config.ZONE_TOP_LEFT_Y,
-        Config.ZONE_BOTTOM_RIGHT_X,
-        Config.ZONE_BOTTOM_RIGHT_Y
+        int(get_camera_setting(camera_key, "ZONE_TOP_LEFT_X")),
+        int(get_camera_setting(camera_key, "ZONE_TOP_LEFT_Y")),
+        int(get_camera_setting(camera_key, "ZONE_BOTTOM_RIGHT_X")),
+        int(get_camera_setting(camera_key, "ZONE_BOTTOM_RIGHT_Y")),
     )
 
     # كل من هو داخل المنطقة (قد يُطلق أحداً منهم حدثاً حسب المهلة لكل شخص)
@@ -279,15 +312,16 @@ def decision_node(state: SurveillanceState) -> SurveillanceState:
         return state
 
     dwell_time = current_time - (_zone_entry_time[camera_key] or 0.0)
-    logger.info(f"⏱️ مدة البقاء: {dwell_time:.2f} ثانية (المطلوب: {Config.ZONE_DWELL_TIME})")
+    logger.info(f"⏱️ مدة البقاء: {dwell_time:.2f} ثانية (المطلوب: {dwell_required})")
 
-    if dwell_time < Config.ZONE_DWELL_TIME:
+    if dwell_time < dwell_required:
         state["alert_sent"] = False
         return state
 
-    # === 3ب. مهلة منع التكرار لكل شخص متتبَّع (track_id) ===
-    track_cooldown = max(float(Config.TRACK_COOLDOWN_SEC), 0.0)
-    _prune_track_alerts(current_time, 2.0 * max(track_cooldown, Config.ALERT_COOLDOWN))
+    # === 3ب. مهلة منع التكرار لكل شخص متتبَّع (track_id) — لهذه الكاميرا ===
+    alert_cooldown = float(get_camera_setting(camera_key, "ALERT_COOLDOWN"))
+    track_cooldown = max(float(get_camera_setting(camera_key, "TRACK_COOLDOWN_SEC")), 0.0)
+    _prune_track_alerts(current_time, 2.0 * max(track_cooldown, alert_cooldown))
     fresh = [
         p for p in in_zone_persons
         if (tid := p.get("track_id")) is None
@@ -332,12 +366,12 @@ def decision_node(state: SurveillanceState) -> SurveillanceState:
         state["alert_sent"] = False
         return state
 
-    # === 4. المهلة  (لكل كاميرا — تحجب تنبيه التسلل حصراً) ===
+    # === 4. المهلة (لكل كاميرا — تحجب تنبيه التسلل حصراً) ===
     last_alert = _last_alert_time.get(camera_key, 0.0)
-    cooldown_remaining = Config.ALERT_COOLDOWN - (current_time - last_alert)
+    cooldown_remaining = alert_cooldown - (current_time - last_alert)
     logger.info(f"🔄 المهلة المتبقية: {cooldown_remaining:.2f} ثانية")
 
-    if current_time - _last_alert_time.get(camera_key, 0.0) < Config.ALERT_COOLDOWN:
+    if current_time - _last_alert_time.get(camera_key, 0.0) < alert_cooldown:
         state["alert_sent"] = False
         return state
 
@@ -366,7 +400,7 @@ def decision_node(state: SurveillanceState) -> SurveillanceState:
         "alert_sent",
         f"Intruder detected in zone [{camera_label}]. No employee match "
         f"({len(unknown_persons)} unknown person(s), "
-        f"dwell {float(Config.ZONE_DWELL_TIME):.0f}s).",
+        f"dwell {dwell_required:.0f}s).",
         trigger.get("confidence"),
     )
 
@@ -453,9 +487,11 @@ def alert_node(state: SurveillanceState) -> SurveillanceState:
             continue
         EventLogger().log_event("forbidden_color_intrusion", dict(color_event), path)
 
+        # القرار في Audit Trail: alert_sent (تنبيه حقيقي أُرسل) والسبب يفصّل
+        # الحدث (لون ممنوع + نسبة المطابقة) كما هو في سجل الأحداث
         _log_agent_decision(
             camera_key,
-            "forbidden_color_intrusion",
+            "alert_sent",
             f"Person wearing forbidden color {color_event.get('color_hex')} "
             f"({color_event.get('match_percentage')}% of torso) inside restricted "
             f"zone [{camera_label}]. Not recognized as an employee "
@@ -494,6 +530,32 @@ def alert_node(state: SurveillanceState) -> SurveillanceState:
         if not path:
             continue
         EventLogger().log_event(anomaly_type, dict(anomaly), path)
+
+        # نافذة التنبيه لهذه الكاميرا (إعدادات منفردة/عام): running/fall خارجها
+        # → قرار alert_suppressed بسبب "Outside alert hours" بلا تيليجرام/بريد
+        # (الحدث نفسه يبقى مسجلاً في سجل الأحداث — بلا إنذار كاذب)
+        if anomaly_type in ("running", "fall") and not _is_alert_hour_valid(
+            camera_key, datetime.now().hour
+        ):
+            start_h, end_h = _camera_alert_hours(camera_key)
+            logger.info(
+                f"⏰ [{anomaly_type}] في [{camera_label}] خارج نافذة التنبيه "
+                f"({start_h:02d}:00\u2013{end_h:02d}:00) — كبت التنبيه"
+            )
+            _log_agent_decision(
+                camera_key,
+                "alert_suppressed",
+                f"{anomaly_type.capitalize()} detected"
+                + (
+                    f" ({anomaly.get('speed_px_s')} px/s)"
+                    if anomaly_type == "running"
+                    else ""
+                )
+                + f". Outside alert hours ({start_h:02d}:00\u2013{end_h:02d}:00) "
+                "for this camera. Alert suppressed.",
+                None,
+            )
+            continue
 
         # رفع مستوى الحدث الشاذ (سقوط/جري) — سجل القرار في Audit Trail
         # (loitering لا يرفع تنبيهاً حسب سياسة الإزعاج — لا قرار escalation)

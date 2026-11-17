@@ -33,11 +33,16 @@ def _parse_cameras(value: Any) -> list[dict[str, Any]]:
             if isinstance(item, dict) and str(item.get("name") or "").strip():
                 raise ValueError(f"الكاميرا رقم {index} بلا رابط")
             continue
-        cameras.append({
+        entry: dict[str, Any] = {
             "id": int(item.get("id", index)),
             "name": str(item.get("name") or f"الكاميرا {index}"),
             "url": str(item["url"]).strip(),
-        })
+        }
+        # الإعدادات المنفردة (Per-Camera Settings) — تُحفظ داخل كائن الكاميرا
+        settings = _parse_camera_settings(item.get("id", index), item.get("settings"))
+        if settings:
+            entry["settings"] = settings
+        cameras.append(entry)
     return cameras
 
 
@@ -192,6 +197,56 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
 }
 
 
+# المفاتيح المسموح تجاوزها لكل كاميرا على حدة داخل camera["settings"] في config.json —
+# قائمة بيضاء حصراً: أي مفتاح آخر (توكنات/نموذج/بريد…) يُهمل مع تحذير
+CAMERA_OVERRIDABLE_SETTINGS: frozenset[str] = frozenset({
+    # نافذة التنبيه (تعبر منتصف الليل حين end < start)
+    "ALERT_START_HOUR", "ALERT_END_HOUR",
+    # المنطقة الحساسة وزمن البقاء
+    "ZONE_TOP_LEFT_X", "ZONE_TOP_LEFT_Y",
+    "ZONE_BOTTOM_RIGHT_X", "ZONE_BOTTOM_RIGHT_Y",
+    "ZONE_DWELL_TIME",
+    # مهلات التنبيه ومنع التكرار
+    "ALERT_COOLDOWN", "TRACK_COOLDOWN_SEC", "ANOMALY_EVENT_COOLDOWN",
+    # اللون الممنوع
+    "ENABLE_COLOR_DETECTION", "FORBIDDEN_COLOR_HEX",
+    "COLOR_TOLERANCE", "COLOR_MIN_PERCENTAGE",
+    # المشاجرات والتجمهر
+    "ENABLE_FIGHT_DETECTION", "FIGHT_IOU_THRESHOLD",
+    "FIGHT_MOTION_THRESHOLD", "FIGHT_MIN_FRAMES",
+    "CROWD_CONVERGENCE_THRESHOLD", "CROWD_MIN_PERSONS",
+    "CROWD_CONVERGENCE_RADIUS_PX",
+})
+
+
+def _parse_camera_settings(camera_id: Any, value: Any) -> dict[str, Any]:
+    """ضبط كائن settings المنفردة للكاميرا — المفاتيح من القائمة المسموحة
+    حصراً والقيم تمر عبر مضبّط الإعداد العام نفسه؛ الفاشل يُهمل مع تحذير
+    (لا يُفشل تحميل الكاميرات كلها بسبب إعداد منفرد خاطئ)."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        logger.warning(
+            f"⚠️ settings الكاميرا {camera_id} يجب أن تكون كائناً — تم تجاهلها"
+        )
+        return {}
+    parsed: dict[str, Any] = {}
+    for key, raw in value.items():
+        if key not in CAMERA_OVERRIDABLE_SETTINGS:
+            logger.warning(
+                f"⚠️ الكاميرا {camera_id}: الإعداد {key} لا يقبل التخصيص — تم تجاهله"
+            )
+            continue
+        try:
+            parsed[key] = _SETTINGS[key][1](raw)
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                f"⚠️ الكاميرا {camera_id}: قيمة غير صالحة لـ {key}: {raw!r} "
+                f"({exc}) — تم تجاهلها"
+            )
+    return parsed
+
+
 def load_json_config() -> dict[str, Any]:
     """قراءة config.json إذا وُجد — يعيد {} إن لم يوجد أو كان تالفًا"""
     try:
@@ -272,3 +327,40 @@ class Config:
 
 # التهيئة الأولية عند الاستيراد (تحاكي السلوك القديم تماماً مع config.json فارغ)
 Config._apply()
+
+
+def get_camera_setting(camera_id: Any, key: str) -> Any:
+    """قيمة إعداد لرقم كاميرا محدد مع الرجوع للعام (Fallback):
+    1) settings الكاميرا داخل config.json إن احتوت المفتاح (القيمة تعيد
+       المرور عبر مضبّط الإعداد نفسه — يتراجع للعام عند فشل التحويل)،
+    2) وإلا القيمة العامة Config.<key> (من config.json/.env/الافتراضي).
+
+    قراءة فقط وثريد-آمنة: لا حالة تتغير — كل ثريد كاميرا يقرأ قيمه الخاصة
+    أثناء العمل المشترك (Multi-Camera) دون تضارب.
+    """
+    if key not in _SETTINGS:
+        raise KeyError(f"إعداد غير معروف: {key}")
+    try:
+        wanted = int(camera_id)
+    except (TypeError, ValueError):
+        return getattr(Config, key)
+    for camera in Config.get_cameras():
+        try:
+            current = int(camera.get("id", -1))
+        except (TypeError, ValueError):
+            continue
+        if current != wanted:
+            continue
+        overrides = camera.get("settings")
+        if isinstance(overrides, dict) and key in overrides:
+            parser = _SETTINGS[key][1]
+            try:
+                return parser(overrides[key])
+            except (ValueError, TypeError) as exc:
+                logger.warning(
+                    f"⚠️ الكاميرا {wanted}: قيمة غير صالحة لـ {key} "
+                    f"({overrides[key]!r}: {exc}) — الرجوع للقيمة العامة"
+                )
+                break
+        break
+    return getattr(Config, key)
