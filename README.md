@@ -57,3 +57,19 @@ cd AI-Surveillance-Agent
 cp .env.example .env
 # Add TELEGRAM_BOT_TOKEN, CHAT_ID, DB passwords
 docker compose up -d --build
+```
+Access the dashboard at http://localhost:3001. The first registered user automatically becomes Superuser.
+
+Demo Video (English subtitles)
+Watch the demo
+
+The video demonstrates: intrusion detection → Telegram alert received → agent autonomously reports camera disconnection.
+
+Security & Privacy
+100% On-Premise Processing: No video leaves the local network. LLM (Ollama) runs locally.
+
+Secure Authentication: bcrypt password hashing, JWT-protected API.
+
+Data Privacy: Employee face encodings are stored server-side only; all report downloads are logged with user ID and timestamp.
+
+Developed by Mowafag Fawzy
