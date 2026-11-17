@@ -61,7 +61,7 @@ docker compose up -d --build
 Access the dashboard at http://localhost:3001. The first registered user automatically becomes Superuser.
 
 Demo Video (English subtitles)
-Watch the demo
+
 
 The video demonstrates: intrusion detection → Telegram alert received → agent autonomously reports camera disconnection.
 
