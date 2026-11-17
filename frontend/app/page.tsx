@@ -10,8 +10,10 @@ import {
   Hourglass,
   LayoutDashboard,
   PersonStanding,
+  Shirt,
   Swords,
   UserRound,
+  Users,
   Video,
   X,
   Zap,
@@ -31,6 +33,8 @@ import { localeDateTimeTag } from "@/lib/dictionary";
 type EventType =
   | "fall"
   | "fight"
+  | "crowd_surge"
+  | "forbidden_color_intrusion"
   | "intrusion"
   | "running"
   | "loitering"
@@ -43,6 +47,12 @@ interface CameraDetails {
   role?: string;
   speed_px_s?: number;
   duration_sec?: number;
+  max_iou?: number;
+  sustained_frames?: number;
+  persons_count?: number;
+  approach_speed_px_s?: number;
+  color_hex?: string;
+  match_percentage?: number;
 }
 
 interface SurveillanceEvent {
@@ -59,6 +69,8 @@ interface DailyStats {
   total?: number;
   fall?: number;
   fight?: number;
+  crowd_surge?: number;
+  forbidden_color_intrusion?: number;
   intrusion?: number;
   running?: number;
   loitering?: number;
@@ -108,9 +120,19 @@ const EVENT_META: Record<EventType, { badge: string; key: string; icon: LucideIc
     icon: Hourglass,
   },
   fight: {
-    badge: "bg-amber-500/10 text-amber-400 ring-1 ring-inset ring-amber-500/30",
+    badge: "bg-red-500/10 text-red-400 ring-1 ring-inset ring-red-500/30",
     key: "fight",
     icon: Swords,
+  },
+  crowd_surge: {
+    badge: "bg-orange-500/10 text-orange-400 ring-1 ring-inset ring-orange-500/30",
+    key: "crowdSurge",
+    icon: Users,
+  },
+  forbidden_color_intrusion: {
+    badge: "bg-violet-500/10 text-violet-400 ring-1 ring-inset ring-violet-500/30",
+    key: "forbiddenColorIntrusion",
+    icon: Shirt,
   },
   intrusion: {
     badge: "bg-sky-500/10 text-sky-400 ring-1 ring-inset ring-sky-500/30",
@@ -367,7 +389,7 @@ export default function Dashboard() {
 
         {/* الإحصائيات — بطاقات بأيقونات وأرقام Monospace */}
         {stats && (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6 mb-8">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-8 mb-8">
             <StatCard
               label={t("dailyTotal")}
               value={stats.total || 0}
@@ -396,7 +418,19 @@ export default function Dashboard() {
               label={t("fight")}
               value={stats.fight || 0}
               icon={Swords}
-              iconClass="bg-amber-500/10 text-amber-400"
+              iconClass="bg-red-500/10 text-red-400"
+            />
+            <StatCard
+              label={t("crowdSurge")}
+              value={stats.crowd_surge || 0}
+              icon={Users}
+              iconClass="bg-orange-500/10 text-orange-400"
+            />
+            <StatCard
+              label={t("forbiddenColorIntrusion")}
+              value={stats.forbidden_color_intrusion || 0}
+              icon={Shirt}
+              iconClass="bg-violet-500/10 text-violet-400"
             />
             <StatCard
               label={t("intrusion")}

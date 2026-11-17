@@ -251,6 +251,8 @@ class FaceRecognizer:
                 person["employee_id"] = best[1][0]
                 person["name"] = best[1][2]
                 person["role"] = best[1][3]
+                # درجة تشابه الوجه (كوسين) — تُستخدم كثقة قرار alert_suppressed
+                person["match_score"] = round(best[0], 4)
         return persons
 
 

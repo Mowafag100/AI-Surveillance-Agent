@@ -44,7 +44,12 @@ from sqlalchemy import select
 
 from src.auth import CurrentUser, DbDep, SuperUser, alias_router, router as auth_router
 from src.config import CONFIG_JSON_PATH, Config, _SETTINGS, load_json_config
-from src.database import Employee, init_employees
+from src.database import (
+    AgentDecision,
+    Employee,
+    init_agent_decisions,
+    init_employees,
+)
 from src.face_recognizer import extract_face_encoding
 
 logger = logging.getLogger(__name__)
@@ -317,6 +322,44 @@ async def delete_employee(
     await db.commit()
     logger.info(f"🗑️ حُذف الموظف {employee.name} (id={employee_id})")
     return Response(status_code=204)
+
+
+# ------------------- Agent Decisions (سجل قرارات الوكيل) -------------------
+
+
+@app.get("/api/decisions")
+async def get_agent_decisions(
+    current_user: CurrentUser,
+    db: DbDep,
+    limit: int = Query(default=50, ge=1, le=200),
+    camera_id: str | None = Query(default=None),
+    decision_type: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    """سجل قرارات الوكيل (Audit Trail) — آخر 50 قراراً افتراضياً (JWT).
+
+    مصدره جدول agent_decisions في PostgreSQL الذي يكتبه حاوية agent:
+    alert_sent / alert_suppressed / anomaly_escalated / camera_offline.
+    جدول فارغ = مصفوفة فارغة. فلاتر اختيارية: camera_id / decision_type."""
+    await init_agent_decisions()
+    query = select(AgentDecision).order_by(
+        AgentDecision.timestamp.desc(), AgentDecision.id.desc()
+    )
+    if camera_id:
+        query = query.where(AgentDecision.camera_id == camera_id)
+    if decision_type:
+        query = query.where(AgentDecision.decision_type == decision_type)
+    rows = (await db.execute(query.limit(limit))).scalars().all()
+    return [
+        {
+            "id": row.id,
+            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+            "camera_id": row.camera_id or "",
+            "decision_type": row.decision_type or "",
+            "reasoning": row.reasoning or "",
+            "confidence": row.confidence,
+        }
+        for row in rows
+    ]
 
 
 # ------------------- Read endpoints -------------------
@@ -642,6 +685,8 @@ _PDF_LABELS: dict[str, dict[str, str]] = {
         "ev_fight": "شجار",
         "ev_running": "جري",
         "ev_loitering": "توقّف مشبوه",
+        "ev_crowd_surge": "تجمهر مفاجئ",
+        "ev_forbidden_color_intrusion": "لون ممنوع",
         "ev_employee_entry": "دخول موظف",
         "showing_note": "يُعرض في الجدول آخر {shown} من {total} حدثاً في الفترة",
         "section_latest": "أحدث الأحداث",
@@ -666,6 +711,8 @@ _PDF_LABELS: dict[str, dict[str, str]] = {
         "ev_fight": "Fight",
         "ev_running": "Running",
         "ev_loitering": "Loitering",
+        "ev_crowd_surge": "Crowd Surge",
+        "ev_forbidden_color_intrusion": "Forbidden Color",
         "ev_employee_entry": "Employee Entry",
         "showing_note": "Table shows the latest {shown} of {total} events in the period",
         "section_latest": "Latest Events",
@@ -816,6 +863,8 @@ async def export_pdf_report(
         (labels["ev_running"], event_counter.get("running", 0), colors.HexColor("#FEF9C3")),
         (labels["ev_loitering"], event_counter.get("loitering", 0), colors.HexColor("#FFEDD5")),
         (labels["ev_fight"], event_counter.get("fight", 0), colors.HexColor("#FEF3C7")),
+        (labels["ev_crowd_surge"], event_counter.get("crowd_surge", 0), colors.HexColor("#FDF2F8")),
+        (labels["ev_forbidden_color_intrusion"], event_counter.get("forbidden_color_intrusion", 0), colors.HexColor("#EDE9FE")),
         (labels["ev_employee_entry"], event_counter.get("employee_entry", 0), colors.HexColor("#D1FAE5")),
     ]
     stat_table = Table(
@@ -823,14 +872,14 @@ async def export_pdf_report(
             [ar(label) for label, _, _ in stat_columns],
             [str(value) for _, value, _ in stat_columns],
         ],
-        colWidths=[2.55 * cm] * len(stat_columns),
+        colWidths=[2.0 * cm] * len(stat_columns),
         rowHeights=[0.7 * cm, 1.0 * cm],
     )
     stat_table.setStyle(
         TableStyle(
             [
                 ("FONTNAME", (0, 0), (-1, -1), _PDF_FONT_NAME),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("FONTSIZE", (0, 1), (-1, 1), 16),
                 ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -973,6 +1022,8 @@ async def get_daily_stats() -> dict[str, Any]:
         "total": 0,
         "fall": 0,
         "fight": 0,
+        "crowd_surge": 0,
+        "forbidden_color_intrusion": 0,
         "intrusion": 0,
         "running": 0,
         "loitering": 0,

@@ -124,6 +124,77 @@ export async function saveSettingsAction(
     payload.TRACK_COOLDOWN_SEC = trackCooldown;
   }
 
+  // ==== كشف المشاجرات (مفتاح التفعيل + عتبات الشجار والتجمهر) ====
+  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false)
+  payload.ENABLE_FIGHT_DETECTION = formData.get("ENABLE_FIGHT_DETECTION") === "on";
+
+  // حقول عشرية/صحيحة مع حدودها — الفراغ يُبقي القيمة الحالية كما هي
+  const fightNumericFields: {
+    key: string;
+    min: number;
+    max: number;
+    integer?: boolean;
+  }[] = [
+    { key: "FIGHT_IOU_THRESHOLD", min: 0.05, max: 0.9 },
+    { key: "FIGHT_MOTION_THRESHOLD", min: 0, max: 10000 },
+    { key: "FIGHT_MIN_FRAMES", min: 1, max: 1000, integer: true },
+    { key: "CROWD_CONVERGENCE_THRESHOLD", min: 0, max: 10000 },
+    { key: "CROWD_MIN_PERSONS", min: 2, max: 20, integer: true },
+    { key: "CROWD_CONVERGENCE_RADIUS_PX", min: 20, max: 10000 },
+  ];
+  for (const field of fightNumericFields) {
+    const rawValue = String(formData.get(field.key) ?? "").trim();
+    if (rawValue === "") continue;
+    const parsedValue = Number(rawValue);
+    if (
+      !Number.isFinite(parsedValue) ||
+      parsedValue < field.min ||
+      parsedValue > field.max ||
+      (field.integer && !Number.isInteger(parsedValue))
+    ) {
+      return { error: `${field.key} يجب أن يكون رقماً ضمن ${field.min}-${field.max}` };
+    }
+    payload[field.key] = parsedValue;
+  }
+
+  // ==== كشف الزي المدرسي/اللون الممنوع (مفتاح التفعيل + اللون والعتبات) ====
+  // checkbox مُدار: قيمته تُرسل دائماً (موجود = true، غائب = false)
+  payload.ENABLE_COLOR_DETECTION = formData.get("ENABLE_COLOR_DETECTION") === "on";
+
+  // اللون السداسي من <input type="color"> بصيغة #rrggbb دائماً — يتحقق من الصيغة
+  const forbiddenColorRaw = String(formData.get("FORBIDDEN_COLOR_HEX") ?? "").trim();
+  if (forbiddenColorRaw !== "") {
+    if (!/^#[0-9a-fA-F]{6}$/.test(forbiddenColorRaw)) {
+      return { error: "FORBIDDEN_COLOR_HEX يجب أن يكون بصيغة #RRGGBB" };
+    }
+    payload.FORBIDDEN_COLOR_HEX = forbiddenColorRaw.toUpperCase();
+  }
+
+  // التسامح (0-255 صحيح) — الفراغ يُبقي القيمة الحالية كما هي
+  const colorToleranceRaw = String(formData.get("COLOR_TOLERANCE") ?? "").trim();
+  if (colorToleranceRaw !== "") {
+    const colorTolerance = Number(colorToleranceRaw);
+    if (
+      !Number.isFinite(colorTolerance) ||
+      !Number.isInteger(colorTolerance) ||
+      colorTolerance < 0 ||
+      colorTolerance > 255
+    ) {
+      return { error: "COLOR_TOLERANCE يجب أن يكون رقماً صحيحاً ضمن 0-255" };
+    }
+    payload.COLOR_TOLERANCE = colorTolerance;
+  }
+
+  // النسبة الدنيا (0-100) — الفراغ يُبقي القيمة الحالية كما هي
+  const colorPercentRaw = String(formData.get("COLOR_MIN_PERCENTAGE") ?? "").trim();
+  if (colorPercentRaw !== "") {
+    const colorPercent = Number(colorPercentRaw);
+    if (!Number.isFinite(colorPercent) || colorPercent < 0 || colorPercent > 100) {
+      return { error: "COLOR_MIN_PERCENTAGE يجب أن يكون رقماً ضمن 0-100" };
+    }
+    payload.COLOR_MIN_PERCENTAGE = colorPercent;
+  }
+
   // مصفوفة الكاميرات (جدول ديناميكي) — ترسل كاملة حتى عند عدم التغيير
   const camerasCount = Number(formData.get("CAMERAS_COUNT") ?? "0");
   const cameras: { id: number; name: string; url: string }[] = [];

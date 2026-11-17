@@ -2,6 +2,7 @@
 
 // رأس لوحة الإدارة (عميل) — ترجم الروابط وشارة المشرف وزر اللغة
 // الجلسة تُمرّر من التخطيط الخادمي (session محقَّقة سلفاً بـ JWT)
+import { Brain } from "lucide-react";
 import Link from "next/link";
 
 import FormLogout from "@/components/form-logout";
@@ -37,6 +38,13 @@ export default function AdminHeaderNav({
           className="text-sm text-teal-400 hover:text-teal-300 transition"
         >
           {t("employeesLink")}
+        </a>
+        <a
+          href="/admin/decisions"
+          className="flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 transition"
+        >
+          <Brain className="h-4 w-4" aria-hidden="true" />
+          {t("decisionsLink")}
         </a>
       </div>
       <div className="flex items-center gap-3 flex-wrap">

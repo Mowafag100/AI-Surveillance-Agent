@@ -28,6 +28,7 @@ from src.agent import build_agent
 from src.alert import Alert
 from src.config import Config, get_config_mtime
 from src.anomaly import prune_camera_alarms
+from src.fight_detector import prune_fight_state
 
 # تقليل عدد خيوط المعالجة لتخفيف الضغط
 torch.set_num_threads(1)
@@ -134,6 +135,10 @@ def main():
     if Config.SHOW_PREVIEW:
         logger.warning("⚠️ SHOW_PREVIEW غير مدعوم مع كاميرات متعددة — تجاهُله")
 
+    # سجل قرارات الوكيل (Audit Trail): إنشاء الجدول عند التشغيل (idempotent)
+    from src.database import ensure_agent_decisions_table
+    ensure_agent_decisions_table()
+
     agent = build_agent()
 
     signal.signal(signal.SIGTERM, _handle_stop)
@@ -195,8 +200,10 @@ def main():
             logger.info(f"🆕 فتح الكاميرا [{spec.get('name')}] ({spec.get('url')})")
             start_worker(spec)
 
-        # 4) تنظيف حالة كشف الشذوذ للكاميرات المحذوفة حيّاً (منع نمو الذاكرة)
-        prune_camera_alarms({int(spec.get("id", 1)) for spec in specs})
+        # 4) تنظيف حالة كشف الشذوذ والشجار للكاميرات المحذوفة حيّاً (منع نمو الذاكرة)
+        active_ids = {int(spec.get("id", 1)) for spec in specs}
+        prune_camera_alarms(active_ids)
+        prune_fight_state(active_ids)
 
     # فتح الكاميرات الابتدائية ثم مراقبة config.json كل 5 ثوانٍ
     reconcile_cameras()
@@ -273,6 +280,19 @@ def _camera_health_monitor(stop_event: threading.Event) -> None:
                     None,
                     f"⚠️ تحذير: الكاميرا [{label}] انقطع بثها!",
                 )
+                # قرار camera_offline في سجل قرارات الوكيل (Audit Trail)
+                try:
+                    from src.database import record_agent_decision_sync
+                    record_agent_decision_sync(
+                        camera_id=int_id,
+                        decision_type="camera_offline",
+                        reasoning=(
+                            f"Camera [{label}] stream lost for more than "
+                            f"{timeout:.0f}s. Telegram warning sent."
+                        ),
+                    )
+                except Exception:
+                    pass  # fail-open — انقطاع القاعدة لا يعطل مراقبة الصحة
             elif is_online and alerted_offline.get(int_id):
                 alerted_offline[int_id] = False
                 logger.info(f"✅ الكاميرا [{label}] استأنفت بثها")

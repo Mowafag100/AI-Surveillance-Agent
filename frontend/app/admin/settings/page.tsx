@@ -53,6 +53,48 @@ export default async function AdminSettingsPage() {
               typeof settings["TRACK_COOLDOWN_SEC"] === "number"
                 ? settings["TRACK_COOLDOWN_SEC"]
                 : 60,
+            fight: {
+              enabled: settings["ENABLE_FIGHT_DETECTION"] === true,
+              iouThreshold:
+                typeof settings["FIGHT_IOU_THRESHOLD"] === "number"
+                  ? settings["FIGHT_IOU_THRESHOLD"]
+                  : 0.2,
+              motionThreshold:
+                typeof settings["FIGHT_MOTION_THRESHOLD"] === "number"
+                  ? settings["FIGHT_MOTION_THRESHOLD"]
+                  : 50,
+              minFrames:
+                typeof settings["FIGHT_MIN_FRAMES"] === "number"
+                  ? settings["FIGHT_MIN_FRAMES"]
+                  : 5,
+              convergenceThreshold:
+                typeof settings["CROWD_CONVERGENCE_THRESHOLD"] === "number"
+                  ? settings["CROWD_CONVERGENCE_THRESHOLD"]
+                  : 80,
+              minPersons:
+                typeof settings["CROWD_MIN_PERSONS"] === "number"
+                  ? settings["CROWD_MIN_PERSONS"]
+                  : 3,
+              convergenceRadius:
+                typeof settings["CROWD_CONVERGENCE_RADIUS_PX"] === "number"
+                  ? settings["CROWD_CONVERGENCE_RADIUS_PX"]
+                  : 150,
+            },
+            color: {
+              enabled: settings["ENABLE_COLOR_DETECTION"] === true,
+              forbiddenColorHex:
+                typeof settings["FORBIDDEN_COLOR_HEX"] === "string"
+                  ? settings["FORBIDDEN_COLOR_HEX"]
+                  : "#0000FF",
+              tolerance:
+                typeof settings["COLOR_TOLERANCE"] === "number"
+                  ? settings["COLOR_TOLERANCE"]
+                  : 40,
+              minPercentage:
+                typeof settings["COLOR_MIN_PERCENTAGE"] === "number"
+                  ? settings["COLOR_MIN_PERCENTAGE"]
+                  : 30,
+            },
             zone: {
               tlx: typeof settings["ZONE_TOP_LEFT_X"] === "number"
                 ? settings["ZONE_TOP_LEFT_X"]

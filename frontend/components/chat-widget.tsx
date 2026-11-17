@@ -26,25 +26,23 @@ export default function ChatWidget() {
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // رسالة ترحيب عند أول فتح — على ملاحظة أنّ الردود من بيانات الأحداث
-  useEffect(() => {
-    if (open && messages.length === 0) {
-      setMessages([
-        {
-          id: nextMessageId++,
-          role: "assistant",
-          content: t("chatWelcome"),
-        },
-      ]);
-    }
-  }, [open, messages.length, t]);
-
   // تمرير آخر الرسائل حيًّا (نمط ChatGPT)
   useEffect(() => {
     if (!open) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, open]);
+
+  // فتح/إغلاق الدردشة — رسالة الترحيب تُزرع مباشرة في حدث النقر
+  // (كانت تُزرع في useEffect — خطأ react-hooks/set-state-in-effect)
+  const toggleChat = useCallback(() => {
+    if (!open && messages.length === 0) {
+      setMessages([
+        { id: nextMessageId++, role: "assistant", content: t("chatWelcome") },
+      ]);
+    }
+    setOpen((value) => !value);
+  }, [open, messages.length, t]);
 
   const sendMessage = useCallback(async () => {
     const message = input.trim();
@@ -187,7 +185,7 @@ export default function ChatWidget() {
       {/* الأيقونة العائمة أسفل الشاشة — تفتح/تغلق الدردشة */}
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleChat}
         aria-label={open ? t("chatClose") : t("chatOpen")}
         className="fixed bottom-6 left-6 z-50 flex h-13 w-13 items-center justify-center rounded-full bg-teal-600 text-white shadow-xl shadow-black/40 ring-1 ring-inset ring-teal-400/40 transition-all hover:scale-105 hover:bg-teal-500 md:h-14 md:w-14"
       >

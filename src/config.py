@@ -70,6 +70,33 @@ def _parse_port(value: Any) -> int:
     return port
 
 
+def _parse_hex_color(value: Any) -> str:
+    """مضبّط لون سداسي #RRGGBB — يقبل بـ/بلا # ويوحدّه حرفياً كبيراً"""
+    text = str(value or "").strip()
+    if not text.startswith("#"):
+        text = "#" + text
+    text = text.upper()
+    if len(text) != 7 or any(c not in "0123456789ABCDEF" for c in text[1:]):
+        raise ValueError("FORBIDDEN_COLOR_HEX يجب أن يكون بصيغة #RRGGBB")
+    return text
+
+
+def _parse_color_tolerance(value: Any) -> int:
+    """تسامح مطابقة اللون ضمن 0-255 (مسافة في فضاء HSV)"""
+    tolerance = int(float(value))
+    if not 0 <= tolerance <= 255:
+        raise ValueError("COLOR_TOLERANCE يجب أن يكون ضمن 0-255")
+    return tolerance
+
+
+def _parse_color_percentage(value: Any) -> float:
+    """نسبة ظهور اللون في الجذع ضمن 0-100 (%)"""
+    percentage = float(value)
+    if not 0.0 <= percentage <= 100.0:
+        raise ValueError("COLOR_MIN_PERCENTAGE يجب أن يكون ضمن 0-100")
+    return percentage
+
+
 # تعريف الإعدادات الديناميكية القابلة للتعديل عبر config.json أو الـ API
 # الصيغة: الاسم داخل Config -> (اسم متغير البيئة في .env، دالة التحويل، القيمة الافتراضية)
 _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
@@ -110,6 +137,37 @@ _SETTINGS: dict[str, tuple[str, Callable[[Any], Any], Any]] = {
     "ANOMALY_EVENT_COOLDOWN": ("ANOMALY_EVENT_COOLDOWN", float, 20.0),
     # مراقبة الصحة: مهلة انقطاع الكاميرا بالثواني قبل اعتبارها غير متصلة
     "CAMERA_TIMEOUT_SEC": ("CAMERA_TIMEOUT_SEC", float, 30),
+    # كشف المشاجرات والتجمهر (src/fight_detector.py): مفتاح + عتبات الشجار والتجمهر
+    "ENABLE_FIGHT_DETECTION": (
+        "ENABLE_FIGHT_DETECTION",
+        lambda v: str(v).strip().lower() in ("1", "true", "yes", "on"),
+        True,
+    ),
+    # أقل تداخل (IoU) بين صندوقي شخصين متجاورين يُعدّ تلاحماً جسدياً
+    "FIGHT_IOU_THRESHOLD": ("FIGHT_IOU_THRESHOLD", float, 0.2),
+    # سرعة الحركة العالية أثناء التلاحم (px/s على إطار 640×480) — تميّز الشجار
+    # عن الوقوف الملاصق الهادئ (انتظار/حديث)
+    "FIGHT_MOTION_THRESHOLD": ("FIGHT_MOTION_THRESHOLD", float, 50.0),
+    # عدد الإطارات المتتالية لاستمرار التداخل قبل إعلان شجار (>5 إطارات)
+    "FIGHT_MIN_FRAMES": ("FIGHT_MIN_FRAMES", int, 5),
+    # سرعة تقارب المسافات بين الأشخاص (px/s) فوقها يُعدّ التوجّه "تجمهراً مفاجئاً"
+    "CROWD_CONVERGENCE_THRESHOLD": ("CROWD_CONVERGENCE_THRESHOLD", float, 80.0),
+    # أقل عدد أشخاص يتقاربون نحو نقطة واحدة لاعتباره تجمهراً
+    "CROWD_MIN_PERSONS": ("CROWD_MIN_PERSONS", int, 3),
+    # نصف قطر التقارب (بكسل) — المسافة الأقصى بين مركزي زوج تُحتسب في العنقود
+    "CROWD_CONVERGENCE_RADIUS_PX": ("CROWD_CONVERGENCE_RADIUS_PX", float, 150.0),
+    # كشف اللون الممنوع (src/color_detector.py): زيّ محدد داخل المنطقة الحساسة
+    "ENABLE_COLOR_DETECTION": (
+        "ENABLE_COLOR_DETECTION",
+        lambda v: str(v).strip().lower() in ("1", "true", "yes", "on"),
+        True,
+    ),
+    # اللون الممنوع بصيغة سداسية (افتراضي أزرق — زيّ الطلاب)
+    "FORBIDDEN_COLOR_HEX": ("FORBIDDEN_COLOR_HEX", _parse_hex_color, "#0000FF"),
+    # تسامح تفاوت درجات اللون (مسافة إقليدية في فضاء HSV) — 0 يعني اللون نفسه حرفياً
+    "COLOR_TOLERANCE": ("COLOR_TOLERANCE", _parse_color_tolerance, 40),
+    # أقل نسبة بكسلات مطابقة في منطقة الجذع (%) لاعتبار الشخص يرتدي اللون
+    "COLOR_MIN_PERCENTAGE": ("COLOR_MIN_PERCENTAGE", _parse_color_percentage, 30.0),
     # البريد الإلكتروني (تنبيهات SMTP — اختيارية عبر ENABLE_EMAIL_ALERTS)
     "SMTP_HOST": ("SMTP_HOST", str, ""),
     "SMTP_PORT": ("SMTP_PORT", _parse_port, 587),

@@ -10,9 +10,11 @@ import {
   Cctv,
   LocateFixed,
   Mail,
+  Palette,
   Plus,
   Save,
   Send,
+  Swords,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -122,6 +124,21 @@ interface FormSettingsProps {
     alerts: { startHour: number; endHour: number };
     modelSize: string;
     minConfidence: number;
+    fight: {
+      enabled: boolean;
+      iouThreshold: number;
+      motionThreshold: number;
+      minFrames: number;
+      convergenceThreshold: number;
+      minPersons: number;
+      convergenceRadius: number;
+    };
+    color: {
+      enabled: boolean;
+      forbiddenColorHex: string;
+      tolerance: number;
+      minPercentage: number;
+    };
     email: {
       enabled: boolean;
       host: string;
@@ -146,6 +163,10 @@ export default function FormSettings({ initial }: FormSettingsProps) {
   );
   // تفعيل تنبيهات البريد (checkbox مُدار — يرسل قيمته مع الحفظ دائماً)
   const [emailEnabled, setEmailEnabled] = useState(initial.email.enabled);
+  // تفعيل كشف المشاجرات (checkbox مُدار — يرسل قيمته مع الحفظ دائماً)
+  const [fightEnabled, setFightEnabled] = useState(initial.fight.enabled);
+  // تفعيل كشف اللون الممنوع (checkbox مُدار — يرسل قيمته مع الحفظ دائماً)
+  const [colorEnabled, setColorEnabled] = useState(initial.color.enabled);
 
   const updateRow = (camId: number, patch: Partial<CameraRow>) => {
     setCameras((rows) =>
@@ -343,6 +364,162 @@ export default function FormSettings({ initial }: FormSettingsProps) {
         <p className="-mt-2.5 text-xs text-slate-500">
           {t("trackCooldownHint")}
         </p>
+      </SettingsSection>
+
+      {/* ===== كشف المشاجرات ===== */}
+      <SettingsSection titleKey="fightSection" icon={Swords} hintKey="fightHint">
+        <label className="flex cursor-pointer select-none items-center gap-3 text-sm font-medium text-slate-300 md:col-span-2">
+          <input
+            type="checkbox"
+            name="ENABLE_FIGHT_DETECTION"
+            checked={fightEnabled}
+            onChange={(event) => setFightEnabled(event.target.checked)}
+            disabled={isPending}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-teal-500"
+          />
+          {t("enableFightDetection")}
+        </label>
+        <div>
+          <ZoneField
+            fieldKey="FIGHT_IOU_THRESHOLD"
+            label={t("fightIouThreshold")}
+            defaultValue={initial.fight.iouThreshold}
+            step="0.05"
+            min={0.05}
+            max={0.9}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">{t("fightIouHint")}</p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="FIGHT_MOTION_THRESHOLD"
+            label={t("fightMotionThreshold")}
+            defaultValue={initial.fight.motionThreshold}
+            step="5"
+            min={0}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("fightMotionHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="FIGHT_MIN_FRAMES"
+            label={t("fightMinFrames")}
+            defaultValue={initial.fight.minFrames}
+            step="1"
+            min={1}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("fightMinFramesHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="CROWD_CONVERGENCE_THRESHOLD"
+            label={t("crowdConvergenceThreshold")}
+            defaultValue={initial.fight.convergenceThreshold}
+            step="5"
+            min={0}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("crowdConvergenceHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="CROWD_MIN_PERSONS"
+            label={t("crowdMinPersons")}
+            defaultValue={initial.fight.minPersons}
+            step="1"
+            min={2}
+            max={20}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("crowdMinPersonsHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="CROWD_CONVERGENCE_RADIUS_PX"
+            label={t("crowdConvergenceRadius")}
+            defaultValue={initial.fight.convergenceRadius}
+            step="10"
+            min={20}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("crowdConvergenceRadiusHint")}
+          </p>
+        </div>
+      </SettingsSection>
+
+      {/* ===== كشف الزي المدرسي/اللون الممنوع ===== */}
+      <SettingsSection titleKey="colorSection" icon={Palette} hintKey="colorHint">
+        <label className="flex cursor-pointer select-none items-center gap-3 text-sm font-medium text-slate-300 md:col-span-2">
+          <input
+            type="checkbox"
+            name="ENABLE_COLOR_DETECTION"
+            checked={colorEnabled}
+            onChange={(event) => setColorEnabled(event.target.checked)}
+            disabled={isPending}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-800 accent-teal-500"
+          />
+          {t("enableColorDetection")}
+        </label>
+        <div>
+          <label
+            htmlFor="FORBIDDEN_COLOR_HEX"
+            className="mb-1.5 block text-xs font-medium text-slate-300"
+          >
+            {t("forbiddenColorLabel")}
+          </label>
+          <div className="flex items-center gap-3">
+            {/* منتقي لون أصلي — يرسل القيمة السداسية دائماً مع الحفظ */}
+            <input
+              id="FORBIDDEN_COLOR_HEX"
+              name="FORBIDDEN_COLOR_HEX"
+              type="color"
+              defaultValue={initial.color.forbiddenColorHex}
+              disabled={isPending}
+              className="h-10 w-14 shrink-0 cursor-pointer rounded-md border border-slate-700 bg-slate-800/80 p-1"
+            />
+            <span
+              dir="ltr"
+              className="font-mono text-xs text-slate-400"
+            >
+              {initial.color.forbiddenColorHex}
+            </span>
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("forbiddenColorHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="COLOR_TOLERANCE"
+            label={t("colorToleranceLabel")}
+            defaultValue={initial.color.tolerance}
+            step="1"
+            min={0}
+            max={255}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("colorToleranceHint")}
+          </p>
+        </div>
+        <div>
+          <ZoneField
+            fieldKey="COLOR_MIN_PERCENTAGE"
+            label={t("colorMinPercentageLabel")}
+            defaultValue={initial.color.minPercentage}
+            step="1"
+            min={0}
+            max={100}
+          />
+          <p className="mt-1.5 text-xs text-slate-500">
+            {t("colorMinPercentageHint")}
+          </p>
+        </div>
       </SettingsSection>
 
       {/* ===== التلغرام ===== */}
